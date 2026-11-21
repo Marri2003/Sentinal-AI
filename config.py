@@ -1,0 +1,210 @@
+"""
+Configuration file for SentinelAI Backend
+"""
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Base directories
+BASE_DIR = Path(__file__).parent
+MODELS_DIR = BASE_DIR / "saved_models"
+DATASETS_DIR = BASE_DIR / "datasets"
+
+# API Configuration
+API_TITLE = "SentinelAI Phishing Detection API"
+API_VERSION = "1.0.0"
+API_DESCRIPTION = "Multi-modal ML system for real-time phishing/smishing detection"
+
+# CORS allowed origins
+CORS_ORIGINS = [
+    "http://localhost:8080",  # Frontend dev server (vite)
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:3000",
+    "http://localhost:3000",
+    "https://sentinelfrontend.vercel.app"
+]
+
+# Groq API Configuration
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = "llama-3.1-8b-instant"
+
+# Model paths
+TEXT_MODEL_PATH = MODELS_DIR / "text_model.pth"
+IMAGE_MODEL_PATH = MODELS_DIR / "image_model.pth"
+METADATA_MODEL_PATH = MODELS_DIR / "metadata_model.pth"
+TEXT_TOKENIZER_PATH = MODELS_DIR / "text_tokenizer"
+METADATA_SCALER_PATH = MODELS_DIR / "metadata_scaler.pkl"
+
+# Model configurations
+TEXT_MODEL_CONFIG = {
+    "model_name": "xlm-roberta-base",  # Multilingual BERT
+    "max_length": 256,
+    "num_labels": 2,
+    "dropout": 0.1
+}
+
+IMAGE_MODEL_CONFIG = {
+    "architecture": "mobilenet_v2",
+    "num_classes": 2,
+    "pretrained": True,
+    "input_size": (224, 224)
+}
+
+METADATA_MODEL_CONFIG = {
+    "input_dim": 15,  # Number of engineered features
+    "hidden_dims": [64, 32, 16],
+    "output_dim": 2,
+    "dropout": 0.3
+}
+
+# Fusion weights (base weights - will be redistributed if modalities missing)
+# Ratios: text:metadata:image = 6:2:2 (0.6:0.2:0.2)
+# Increased text weight to reduce false positives from aggressive metadata
+# When metadata missing: text=0.75, image=0.25
+# When image missing: text=0.75, metadata=0.25
+# When only one available: that modality gets 1.0
+FUSION_WEIGHTS = {
+    "text": 0.60,
+    "metadata": 0.20,
+    "image": 0.20
+}
+
+# Decision threshold (configurable)
+# Lowered from 0.50 to 0.45 to reduce false positives on legitimate harsh messages
+SPAM_THRESHOLD = 0.45
+
+# Confidence thresholds for fusion output
+CONFIDENCE_THRESHOLDS = {
+    "high_upper": 0.75,   # Score > 0.75 = HIGH confidence spam
+    "high_lower": 0.25,   # Score < 0.25 = HIGH confidence ham
+    "medium_upper": 0.60, # Score 0.40-0.75 or 0.25-0.40 = MEDIUM
+    "medium_lower": 0.40,
+}
+
+# Trusted domains - reduce suspicion for these domains
+TRUSTED_DOMAINS = {
+    # Government domains
+    ".gov.in", ".gov.pk", ".nic.in", ".gov",
+    # Educational domains
+    ".edu", ".ac.in", ".edu.pk",
+    # Verified company domains
+    "amazon.in", "flipkart.com", "tcs.com", "icicibank.com",
+    "sbi.co.in", "hdfcbank.com", "paytm.com", "phonepe.com",
+    "incometax.gov.in", "scholarships.gov.in", "nobroker.in",
+    "zomato.com", "swiggy.com", "irctc.co.in", "apollohospitals.com",
+    "nta.ac.in", "careers.tcs.com"
+}
+
+# Trusted sender IDs - legitimate company/service sender patterns
+TRUSTED_SENDERS = {
+    # Banking
+    "HDFCBK", "SBIBNK", "SBIINB", "ICICIB", "AXISBK", "KOTAKB",
+    # Telecom
+    "AIRTEL", "JIONET", "VIINFO", "BSNLMB",
+    # Services
+    "AMAZON", "FLIPKT", "PAYTM", "PHONPE", "GPAY",
+    "SWIGGY", "ZOMATO", "UBEREA", "OLA",
+    # Government
+    "ITDEPT", "NSDL", "UIDAI", "GHMC", "IRCTC", "TRAICC",
+    # Others
+    "APOLLO", "NOBRKR", "TCSHRD", "NSPSCM", "TNELEC", "ANNAUV", "SBIYNO",
+    "LICIND", "HBLBNK", "PIAAIR", "TNEBCC"
+}
+
+# Suspicious domain patterns (for metadata analysis)
+SUSPICIOUS_DOMAIN_PATTERNS = [
+    ".xyz", ".tk", ".ml", ".ga", ".cf", ".site"
+]
+
+# Default scores - DEPRECATED (missing modalities now excluded from fusion)
+DEFAULT_SCORES = {
+    "text": 0.5,
+    "image": 0.5,
+    "metadata": 0.5
+}
+
+# Device configuration
+import torch
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# Training hyperparameters
+TRAINING_CONFIG = {
+    "epochs": 20,
+    "batch_size": 8,
+    "learning_rate": 3e-5,
+    "weight_decay": 1e-4,
+    "label_smoothing": 0.05,
+    "max_sequence_length": 128,
+    "validation_split": 0.2,
+    "random_seed": 42,
+    "warmup_steps": 100,
+    "early_stopping_patience": 4,
+    "metadata_early_stopping_patience": 3,
+    "text_calibration_temperature": 1.6,
+    "metadata_calibration_temperature": 1.8,
+    "probability_floor": 0.02,
+    "probability_ceiling": 0.98
+}
+
+# Feature extraction settings
+METADATA_FEATURES = [
+    "url_length",
+    "url_num_dots",
+    "url_num_digits",
+    "url_num_special_chars",
+    "url_entropy",
+    "is_shortened_url",
+    "has_ip_address",
+    "has_at_symbol",
+    "sender_length",
+    "sender_has_numbers",
+    "sender_has_special_chars",
+    "hour_of_day",
+    "is_weekend",
+    "url_has_https",
+    "url_suspicious_tld"
+]
+
+# Suspicious patterns
+SUSPICIOUS_KEYWORDS = [
+    "verify", "urgent", "suspend", "confirm", "account", "update",
+    "click", "prize", "winner", "congratulations", "blocked",
+    "expire", "immediately", "act now", "limited time", "offer"
+]
+
+SHORTENED_URL_DOMAINS = [
+    "bit.ly", "tinyurl.com", "goo.gl", "ow.ly", "t.co",
+    "buff.ly", "is.gd", "cli.gs", "cutt.ly", "shorturl.at"
+]
+
+SUSPICIOUS_TLDS = [
+    ".tk", ".ml", ".ga", ".cf", ".gq", ".xyz", ".top",
+    ".work", ".date", ".racing", ".download"
+]
+
+# Logging
+LOG_LEVEL = "INFO"
+LOG_FORMAT = "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan> - <level>{message}</level>"
+
+# LLM Configuration for /justify endpoint (Groq API)
+LLM_CONFIG = {
+    "provider": "groq",
+    "groq_api_key": os.getenv("GROQ_API_KEY"),  # Set in .env file
+    "groq_model": "llama-3.1-8b-instant",
+    "groq_api_url": "https://api.groq.com/openai/v1/chat/completions",
+    "max_tokens": 2000,
+    "temperature": 0.3,
+}
+
+# System prompt for justification generation
+JUSTIFY_SYSTEM_PROMPT = """You are a cybersecurity assistant. Based on the phishing detection analysis provided, give a clear 2-3 sentence explanation to a non-technical user about why this message was flagged or cleared. Mention specific words or URL patterns that were suspicious. Be factual, not alarmist. Respond in plain English only. IMPORTANT: Only mention URLs, words, or features 
+that are explicitly listed in the analysis data.Never invent or assume URLs, keywords, or sender 
+names that are not provided. If contributing_words 
+is empty, say 'our text analysis flagged suspicious 
+patterns' without mentioning specific words."""

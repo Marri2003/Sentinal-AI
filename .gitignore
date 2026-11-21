@@ -1,0 +1,35 @@
+# Python virtual environments & caches
+.venv/
+env/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Environment files
+.env
+*.env.local
+
+# Large models (>100MB exceeds GitHub push limit)
+saved_models/*
+!saved_models/.gitkeep
+
+# Large setup binaries & scratch files
+*.exe
+*.msi
+scratch/
+
+# Large dataset CSVs (>50MB triggers GitHub push warning; keep directory via .gitkeep)
+pipeline 3/*.csv
+!pipeline 3/.gitkeep
+
+# Frontend dependencies & build artifacts
+frontend/node_modules/
+frontend/dist/
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,14 @@
+# Node modules & builds
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Environment variables
+.env.local
+.env.production.local
+.env.development.local
+
+# Editor / OS
+.DS_Store
+Thumbs.db

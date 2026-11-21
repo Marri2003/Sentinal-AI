@@ -1,0 +1,683 @@
+"""
+Text Analysis Pipeline - Multilingual BERT for SMS Classification
+Returns detected spam keywords, attention-based token contributions, and explanations.
+"""
+import os
+import re
+import torch
+import torch.nn as nn
+from transformers import AutoTokenizer, AutoModel
+from typing import Dict, Optional, Tuple, List, Any
+from dataclasses import dataclass
+import numpy as np
+import logging
+
+from config import (
+    TEXT_MODEL_CONFIG,
+    DEVICE,
+    TEXT_TOKENIZER_PATH,
+    TEXT_MODEL_PATH,
+    TRAINING_CONFIG,
+)
+from utils.preprocessing import detect_spam_keywords
+
+logger = logging.getLogger(__name__)
+
+TEXT_TEMPERATURE = TRAINING_CONFIG.get("text_calibration_temperature", 1.0)
+PROBABILITY_FLOOR = TRAINING_CONFIG.get("probability_floor", 0.0)
+PROBABILITY_CEILING = TRAINING_CONFIG.get("probability_ceiling", 1.0)
+
+
+# Rule-based patterns for post-processing adjustments
+SAFE_PATTERNS = [
+    # English safe patterns
+    r'\botp\b',
+    r'one.time.pass',
+    r'valid for \d+',
+    r'do not share',
+    r'don.t share',
+    r'\bdelivered\b',
+    r'out for delivery',
+    r'order.*ship',
+    r'has been shipped',
+    r'payment.*received',
+    r'debited.*account',
+    r'credited.*account',
+    r'available bal',
+    r'transaction.*alert',
+    r'\btrack.*order\b',
+    r'expected delivery',
+    r'bill.*generated',
+    r'premium.*received',
+    r'postpaid.*bill',
+    r'due date',
+    r'hallticket',
+    r'hall ticket',
+    r'exam.*hall ticket',
+    r'hall ticket.*download',
+    r'examination.*date',
+    r'jntuh|mgit|osmania',
+    r'anna university',
+    r'annauniv\.edu',
+    r'coe1\.annauniv\.edu',
+    # Government/Official patterns
+    r'acknowledgement.*no',
+    r'itr.*filed',
+    r'request.*received',
+    r'processing time',
+    r'status.*check',
+    r'refund.*credit.*within',
+    r'incometax\.gov',
+    r'uidai\.gov',
+    r'\.gov\.in',
+    r'trai',
+    r'port request',
+    r'new operator',
+    r'effective date',
+    # Security notification patterns
+    r'new sign.in.*google',
+    r'was this you',
+    r'no action needed',
+    r'myaccount\.google',
+    r'suspicious login attempt',
+    r'if this wasn.t you',
+    r'if this is not you',
+    r'call (our|the)? ?official',
+    r'call 1800',
+    r'helpline',
+    # Telugu safe patterns
+    r'debit అయింది',
+    r'credit అయింది',
+    r'balance.*rs',
+    r'upi ref',
+    r'available balance',
+    r'merchant.*swiggy|zomato|amazon',
+    r'\bsbi\b.*account',
+    r'నిమిషాలలో expire',
+    r'చెప్పవద్దు',
+    r'successful అయింది',
+    r'బిల్.*rs',
+    # Hindi safe patterns
+    r'debit हुए',
+    r'credit हुए',
+    r'successful रहा',
+    r'deliver हो गया',
+    r'recharge.*हो गया',
+    r'electricity.*connection',
+    r'amount due',
+    r'call 1912',
+    r'units consumed',
+    r'bescom|tneb|msedcl|tsspdcl|apspdcl',
+    # Marathi/Tamil/Urdu safe patterns commonly seen in legitimate alerts
+    r'तुमच्या खात्यातून',
+    r'उपलब्ध शिल्लक',
+    r'कुणाशीही share करू नका',
+    r'உங்கள்.*mobile number',
+    r'போர்ட் request',
+    r'issues இருந்தால்',
+    r'آپ کا.*expire ہو گیا',
+    r'فوری renew کریں',
+]
+
+PHISHING_PATTERNS = [
+    r'click.*(here|now|link|below)',
+    r'verify.*account',
+    r'account.*suspend',
+    r'urgent.*action.*required',
+    r'win.*prize',
+    r'won.*lottery',
+    r'claim.*reward',
+    r'claim.*prize',
+    r'lucky draw',
+    r'only \d+ seats left',
+    r'work from home job',
+    r'register.*(job|apply)',
+    r'resume.*select',
+    r'password.*expire',
+    r'reset.*password',
+    r'secure.*upi',
+    r'upi.*block',
+    r'unauthorized access',
+    r'renew.*cnic',
+    r'renew.*immediately',
+    r'expire.*\d+.*hour',
+    r'confirm.*identity',
+    r'update.*kyc',
+]
+
+
+def calibrate_probability(probability: float, temperature: float) -> float:
+    """Apply temperature scaling to soften overconfident probabilities."""
+    probability = float(np.clip(probability, 1e-6, 1 - 1e-6))
+    temperature = max(float(temperature), 1e-6)
+    logit = np.log(probability / (1.0 - probability))
+    calibrated = 1.0 / (1.0 + np.exp(-(logit / temperature)))
+    return float(np.clip(calibrated, PROBABILITY_FLOOR, PROBABILITY_CEILING))
+
+
+def nudge_probability(probability: float, target: float, strength: float) -> float:
+    """Move a score toward a target without hard-capping to a single band."""
+    return float(np.clip(
+        probability + (target - probability) * strength,
+        PROBABILITY_FLOOR,
+        PROBABILITY_CEILING
+    ))
+
+
+def apply_rules(text: str, raw_score: float) -> Tuple[float, List[str]]:
+    """
+    Apply rule-based post-processing to adjust model predictions.
+    Reduces false positives on legitimate messages (OTP, bank alerts, etc.)
+
+    Args:
+        text: Input message text
+        raw_score: Raw spam probability from model (0.0 - 1.0)
+
+    Returns:
+        Tuple of (adjusted_score, rules_fired) where rules_fired is a list of matched pattern names
+    """
+    text_lower = text.lower()
+
+    # Count pattern matches
+    safe_hits = sum(
+        1 for p in SAFE_PATTERNS
+        if re.search(p, text_lower, re.IGNORECASE)
+    )
+    phishing_hits = sum(
+        1 for p in PHISHING_PATTERNS
+        if re.search(p, text_lower, re.IGNORECASE)
+    )
+
+    rules_fired = []
+
+    print(f"Safe hits: {safe_hits}, Phishing hits: {phishing_hits}, Text: {text[:60]}")
+
+    # Phishing AND safe patterns both present - Phishing always wins
+    if phishing_hits >= 1 and safe_hits >= 1:
+        rules_fired.append("phishing_priority")
+        return nudge_probability(raw_score, 0.68, 0.15), rules_fired
+
+    # Clearly safe — cap at 0.30
+    elif safe_hits >= 2 and phishing_hits == 0:
+        rules_fired.append("safe_capped")
+        strength = min(0.70, 0.20 + 0.12 * safe_hits)
+        return nudge_probability(raw_score, 0.18, strength), rules_fired
+
+    # Clearly phishing — floor at 0.70 (even 1 phishing pattern with no safe patterns)
+    elif phishing_hits >= 1 and safe_hits == 0:
+        rules_fired.append("phishing_floored")
+        strength = min(0.55, 0.18 + 0.10 * phishing_hits)
+        return nudge_probability(raw_score, 0.82, strength), rules_fired
+
+    # Unclear — use raw score
+    else:
+        return float(np.clip(raw_score, PROBABILITY_FLOOR, PROBABILITY_CEILING)), rules_fired
+
+
+@dataclass
+class TokenContribution:
+    """A token and its attention-based contribution score."""
+    word: str
+    score: float
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {"word": self.word, "score": round(self.score, 4)}
+
+
+@dataclass
+class TextAnalysisResult:
+    """Complete result from text analysis with explainability."""
+    score: float                              # Spam probability (after rules)
+    raw_score: float                          # Raw model score (before rules)
+    label: str                                # "SPAM" or "HAM"
+    contributing_words: List[TokenContribution]  # Top tokens by attention
+    detected_keywords: List[str]              # Rule-based keyword matches
+    rules_fired: List[str]                    # Post-processing rules that fired
+    explanation: str                          # Human-readable explanation
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "score": round(self.score, 4),
+            "raw_score": round(self.raw_score, 4),
+            "label": self.label,
+            "contributing_words": [t.to_dict() for t in self.contributing_words],
+            "detected_keywords": self.detected_keywords,
+            "rules_fired": self.rules_fired,
+            "explanation": self.explanation
+        }
+
+
+class TextClassifier(nn.Module):
+    """
+    Multilingual BERT-based text classifier for phishing detection.
+    Supports English, Hindi, Hinglish, Telugu, and other languages.
+    Can output attention weights for explainability.
+    """
+
+    def __init__(
+        self,
+        model_name: str = TEXT_MODEL_CONFIG["model_name"],
+        num_labels: int = TEXT_MODEL_CONFIG["num_labels"],
+        dropout: float = TEXT_MODEL_CONFIG["dropout"]
+    ):
+        super(TextClassifier, self).__init__()
+
+        # Load pretrained multilingual BERT with 'eager' attention for explainability
+        # SDPA attention doesn't support output_attentions, so we use eager mode
+        self.bert = AutoModel.from_pretrained(
+            model_name,
+            attn_implementation='eager'
+        )
+
+        # Classification head
+        self.dropout = nn.Dropout(dropout)
+        self.classifier = nn.Linear(self.bert.config.hidden_size, num_labels)
+
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        output_attentions: bool = False
+    ) -> Tuple[torch.Tensor, Optional[Tuple]]:
+        """
+        Forward pass with optional attention output.
+
+        Args:
+            input_ids: Token IDs (batch_size, seq_len)
+            attention_mask: Attention mask (batch_size, seq_len)
+            output_attentions: If True, return attention weights
+
+        Returns:
+            Tuple of (logits, attentions) where attentions is None if not requested
+        """
+        # Get BERT outputs with optional attentions
+        outputs = self.bert(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            output_attentions=output_attentions
+        )
+
+        # Use [CLS] token representation
+        pooled_output = outputs.last_hidden_state[:, 0, :]
+
+        # Classification
+        pooled_output = self.dropout(pooled_output)
+        logits = self.classifier(pooled_output)
+
+        # Return attentions if requested
+        attentions = outputs.attentions if output_attentions else None
+
+        return logits, attentions
+
+
+class TextPipeline:
+    """
+    Complete text analysis pipeline with attention-based explainability.
+    """
+
+    def __init__(
+        self,
+        model_path: Optional[str] = None,
+        tokenizer_path: Optional[str] = None
+    ):
+        """
+        Initialize text pipeline.
+
+        Args:
+            model_path: Path to saved model weights
+            tokenizer_path: Path to saved tokenizer
+        """
+        self.device = torch.device(DEVICE)
+        self.max_length = TEXT_MODEL_CONFIG["max_length"]
+        self.model_loaded = False
+
+        # Determine tokenizer path
+        if tokenizer_path is None:
+            tokenizer_path = TEXT_TOKENIZER_PATH if TEXT_TOKENIZER_PATH else TEXT_MODEL_CONFIG["model_name"]
+
+        # Load tokenizer (trained or pretrained)
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained(str(tokenizer_path))
+            logger.info(f"Loaded tokenizer from {tokenizer_path}")
+        except Exception as e:
+            logger.warning(f"Could not load tokenizer from {tokenizer_path}: {e}")
+            logger.warning(f"Falling back to pretrained model: {TEXT_MODEL_CONFIG['model_name']}")
+            self.tokenizer = AutoTokenizer.from_pretrained(TEXT_MODEL_CONFIG["model_name"])
+
+        # Initialize model
+        self.model = TextClassifier()
+
+        # Load trained weights if available
+        model_path = model_path or TEXT_MODEL_PATH
+        if model_path and os.path.exists(model_path):
+            try:
+                self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+                logger.info(f"✓ Loaded trained text model from {model_path}")
+                self.model_loaded = True
+            except Exception as e:
+                logger.warning(f"✗ Could not load trained text model from {model_path}: {e}")
+                logger.warning("Using pretrained XLM-RoBERTa base model (untrained classifier head)")
+        elif model_path:
+            logger.warning(f"✗ Text model file not found: {model_path}")
+            logger.warning("Using pretrained XLM-RoBERTa base model (untrained classifier head)")
+
+        self.model.to(self.device)
+        self.model.eval()
+
+    def preprocess(self, text: str) -> Dict[str, torch.Tensor]:
+        """
+        Preprocess text input.
+
+        Args:
+            text: Input SMS text
+
+        Returns:
+            Dictionary with input_ids and attention_mask
+        """
+        # Tokenize
+        encoding = self.tokenizer(
+            text,
+            max_length=self.max_length,
+            padding='max_length',
+            truncation=True,
+            return_tensors='pt'
+        )
+
+        return {
+            'input_ids': encoding['input_ids'].to(self.device),
+            'attention_mask': encoding['attention_mask'].to(self.device)
+        }
+
+    @torch.no_grad()
+    def predict(self, text: str) -> float:
+        """
+        Predict phishing probability for text with rule-based post-processing.
+
+        Args:
+            text: Input SMS text
+
+        Returns:
+            Probability score (0.0 - 1.0) where higher = more likely spam
+        """
+        if not text or not text.strip():
+            return 0.5  # Neutral score for empty text
+
+        # Preprocess
+        inputs = self.preprocess(text)
+
+        # Forward pass (no attention needed for simple prediction)
+        logits, _ = self.model(
+            input_ids=inputs['input_ids'],
+            attention_mask=inputs['attention_mask'],
+            output_attentions=False
+        )
+
+        # Get probability for SPAM class (assuming index 1)
+        probs = torch.softmax(logits, dim=1)
+        raw_spam_prob = probs[0, 1].item()
+        calibrated_spam_prob = calibrate_probability(raw_spam_prob, TEXT_TEMPERATURE)
+
+        # Apply rule-based post-processing
+        adjusted_score, _ = apply_rules(text, calibrated_spam_prob)
+        print(
+            f"Raw: {raw_spam_prob:.4f} -> Calibrated: {calibrated_spam_prob:.4f} "
+            f"-> Adjusted: {adjusted_score:.4f}"
+        )
+
+        return adjusted_score
+
+    @torch.no_grad()
+    def _extract_attention_contributions(
+        self,
+        text: str,
+        inputs: Dict[str, torch.Tensor],
+        attentions: Tuple[torch.Tensor],
+        top_k: int = 5
+    ) -> List[TokenContribution]:
+        """
+        Extract top contributing tokens based on attention weights.
+
+        Uses the last attention layer, averages across all heads,
+        and focuses on attention from [CLS] token to other tokens.
+
+        Args:
+            text: Original input text
+            inputs: Tokenized inputs
+            attentions: Tuple of attention tensors from each layer
+            top_k: Number of top tokens to return
+
+        Returns:
+            List of TokenContribution objects
+        """
+        if attentions is None or len(attentions) == 0:
+            print(f"DEBUG: Early return - attentions is None: {attentions is None}, len: {len(attentions) if attentions else 'N/A'}")
+            return []
+
+        try:
+            # Get last layer attention: shape (batch, heads, seq_len, seq_len)
+            last_layer_attention = attentions[-1]
+
+            # Average across all attention heads: shape (batch, seq_len, seq_len)
+            avg_attention = last_layer_attention.mean(dim=1)
+
+            # Get attention from CLS token (index 0) to all other tokens
+            # Shape: (seq_len,)
+            cls_attention = avg_attention[0, 0, :].cpu().numpy()
+
+            # Get attention mask to identify valid tokens
+            attention_mask = inputs['attention_mask'][0].cpu().numpy()
+
+            # Get input tokens
+            input_ids = inputs['input_ids'][0].cpu().numpy()
+            tokens = self.tokenizer.convert_ids_to_tokens(input_ids)
+
+            # DEBUG: Show raw attention data
+            print(f"DEBUG: Raw attention shape: {attentions[-1].shape}")
+            print(f"DEBUG: Tokens: {tokens[:10]}")
+            print(f"DEBUG: Attention scores (CLS to all): {cls_attention[:10]}")
+            print(f"DEBUG: Attention mask: {attention_mask[:10]}")
+
+            # Merge subword tokens into full words with averaged attention scores
+            merged_words = []
+            merged_scores = []
+            current_word = ""
+            current_score = 0.0
+            current_count = 0
+
+            for token, score, mask in zip(tokens, cls_attention, attention_mask):
+                # Skip padding
+                if mask == 0:
+                    continue
+
+                # Skip special tokens
+                if token in ['<s>', '</s>', '<pad>', '<unk>', '[CLS]', '[SEP]', '[PAD]']:
+                    continue
+
+                # ▁ prefix means start of new word (U+2581)
+                if token.startswith('\u2581'):
+                    # Save previous word if exists
+                    if current_word:
+                        merged_words.append(current_word)
+                        merged_scores.append(current_score / current_count)
+                    # Start new word (remove ▁ prefix)
+                    current_word = token[1:]
+                    current_score = float(score)
+                    current_count = 1
+                else:
+                    # Continue building current word (subword continuation)
+                    current_word += token
+                    current_score += float(score)
+                    current_count += 1
+
+            # Don't forget last word
+            if current_word:
+                merged_words.append(current_word)
+                merged_scores.append(current_score / current_count)
+
+            # Normalize scores to 0-1 range
+            if merged_scores:
+                max_score = max(merged_scores)
+                if max_score > 0:
+                    merged_scores = [s / max_score for s in merged_scores]
+
+            # Sort by score and take top K
+            # Filter out short/meaningless tokens (len < 3)
+            word_score_pairs = [
+                (w, s) for w, s in zip(merged_words, merged_scores)
+                if len(w) >= 3 and not w.isspace()
+            ]
+            word_score_pairs.sort(key=lambda x: x[1], reverse=True)
+            top_words = word_score_pairs[:top_k]
+
+            # Convert to TokenContribution objects
+            unique_contributions = [
+                TokenContribution(word=w, score=round(s, 3))
+                for w, s in top_words
+            ]
+
+            print(f"DEBUG: Merged words found: {len(merged_words)}")
+            print(f"DEBUG: After filtering (len>=3): {len(word_score_pairs)}")
+            print(f"DEBUG: Contributing words: {[(c.word, c.score) for c in unique_contributions]}")
+
+            return unique_contributions
+
+
+        except Exception as e:
+            logger.warning(f"Failed to extract attention contributions: {e}")
+            return []
+
+    @torch.no_grad()
+    def predict_with_explanation(
+        self,
+        text: str,
+        top_k: int = 5
+    ) -> TextAnalysisResult:
+        """
+        Predict with full explainability including attention-based token contributions.
+
+        Args:
+            text: Input SMS text
+            top_k: Number of top contributing tokens to return
+
+        Returns:
+            TextAnalysisResult with score, contributing words, and explanation
+        """
+        print("TEXT PIPELINE METHOD CALLED: predict_with_explanation()")
+        if not text or not text.strip():
+            return TextAnalysisResult(
+                score=0.5,
+                raw_score=0.5,
+                label="HAM",
+                contributing_words=[],
+                detected_keywords=[],
+                rules_fired=[],
+                explanation="Text is empty"
+            )
+
+        # Preprocess
+        inputs = self.preprocess(text)
+
+        # Forward pass WITH attention
+        logits, attentions = self.model(
+            input_ids=inputs['input_ids'],
+            attention_mask=inputs['attention_mask'],
+            output_attentions=True
+        )
+
+        # Get raw probability
+        probs = torch.softmax(logits, dim=1)
+        raw_spam_prob = probs[0, 1].item()
+        calibrated_spam_prob = calibrate_probability(raw_spam_prob, TEXT_TEMPERATURE)
+
+        # Apply rule-based post-processing
+        adjusted_spam_prob, rules_fired = apply_rules(text, calibrated_spam_prob)
+        print(
+            f"Raw: {raw_spam_prob:.4f} -> Calibrated: {calibrated_spam_prob:.4f} "
+            f"-> Adjusted: {adjusted_spam_prob:.4f}"
+        )
+        label = "SPAM" if adjusted_spam_prob > 0.5 else "HAM"
+
+        # Extract attention-based contributions
+        print(f"DEBUG: Attentions type: {type(attentions)}")
+        print(f"DEBUG: Attentions is None: {attentions is None}")
+        if attentions is not None:
+            print(f"DEBUG: Attentions length: {len(attentions)}")
+            if len(attentions) > 0:
+                print(f"DEBUG: Last layer attention shape: {attentions[-1].shape}")
+
+        contributing_words = self._extract_attention_contributions(
+            text, inputs, attentions, top_k=top_k
+        )
+
+        # Detect rule-based keywords
+        detected_keywords = detect_spam_keywords(text)
+
+        # Generate explanation
+        explanation = self._generate_explanation(adjusted_spam_prob, contributing_words, detected_keywords, rules_fired)
+
+        return TextAnalysisResult(
+            score=adjusted_spam_prob,
+            raw_score=raw_spam_prob,
+            label=label,
+            contributing_words=contributing_words,
+            detected_keywords=detected_keywords,
+            rules_fired=rules_fired,
+            explanation=explanation
+        )
+
+    @torch.no_grad()
+    def predict_with_keywords(self, text: str) -> Tuple[float, List[str], str]:
+        """
+        Predict phishing probability and return detected keywords (Pipeline 1).
+        Legacy method for backwards compatibility.
+
+        Args:
+            text: Input SMS text
+
+        Returns:
+            Tuple of (score, detected_keywords_list, explanation)
+        """
+        result = self.predict_with_explanation(text)
+        return result.score, result.detected_keywords, result.explanation
+
+    def _generate_explanation(
+        self,
+        score: float,
+        contributing_words: List[TokenContribution],
+        keywords: List[str],
+        rules_fired: List[str] = []
+    ) -> str:
+        """Generate explanation for text-based prediction."""
+        parts = []
+
+        if score > 0.7:
+            parts.append("High-risk spam detected")
+        elif score > 0.5:
+            parts.append("Moderate spam probability")
+        else:
+            parts.append("Text appears legitimate")
+
+        # Add contributing words info
+        if contributing_words:
+            top_words = [c.word for c in contributing_words[:3]]
+            parts.append(f"Key tokens: {', '.join(top_words)}")
+
+        # Add keyword info
+        if keywords:
+            parts.append(f"Suspicious keywords: {', '.join(keywords[:3])}")
+
+        # Add rule adjustments
+        if rules_fired:
+            if "phishing_priority" in rules_fired:
+                parts.append("Rule: Phishing priority (mixed signals)")
+            elif "safe_capped" in rules_fired:
+                parts.append("Rule: Adjusted down (legitimate patterns)")
+            elif "phishing_floored" in rules_fired:
+                parts.append("Rule: Adjusted up (phishing patterns)")
+
+        return " | ".join(parts)
+
+    def save_model(self, path: str):
+        """Save model weights."""
+        torch.save(self.model.state_dict(), path)
+        logger.info(f"Model saved to {path}")

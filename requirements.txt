@@ -1,0 +1,33 @@
+# Recommended: Python 3.10 or 3.11
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+python-multipart==0.0.6
+python-dotenv==1.0.0
+loguru==0.7.2
+httpx==0.26.0
+pytest==7.4.4
+
+# Data science / training
+numpy==1.26.4
+pandas==2.1.4
+scikit-learn==1.4.0
+tqdm==4.66.1
+
+# Deep learning (CPU baseline; install CUDA-specific PyTorch separately if needed)
+torch==2.1.2
+torchvision==0.16.2
+transformers==4.36.2
+sentencepiece==0.1.99
+
+# Image OCR and preprocessing
+Pillow==10.2.0
+opencv-python==4.9.0.80
+pytesseract==0.3.10
+
+# URL / utility dependencies
+tldextract==5.1.1
+urllib3==2.1.0
+nltk==3.8.1
+aiofiles==23.2.1
+python-jose[cryptography]==3.3.0
