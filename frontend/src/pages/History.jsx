@@ -30,6 +30,7 @@ export default function History() {
   const [filterDate, setFilterDate] = useState('ALL');
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [deleteModalRecord, setDeleteModalRecord] = useState(null);
+  const [showClearAllModal, setShowClearAllModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState(null);
 
@@ -95,6 +96,28 @@ export default function History() {
     }
   };
 
+  // Clear all scan records for the logged-in user
+  const handleClearAllHistory = async () => {
+    if (!supabase || !user?.id) return;
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('analyses')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setRecords([]);
+      setFeedbackMessage({ type: 'success', text: 'All scan records have been cleared from your account.' });
+      setShowClearAllModal(false);
+    } catch (err) {
+      setFeedbackMessage({ type: 'error', text: `Failed to purge history: ${err.message}` });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // Filter records
   const filteredRecords = records.filter(item => {
     // Search
@@ -146,6 +169,16 @@ export default function History() {
     document.body.removeChild(link);
   };
 
+  // Export to JSON
+  const handleExportJSON = () => {
+    if (filteredRecords.length === 0) return;
+    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(filteredRecords, null, 2))}`;
+    const link = document.createElement('a');
+    link.href = jsonString;
+    link.download = `sentinelai_threat_audit_${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+  };
+
   // Pagination calculation
   const totalPages = Math.ceil(filteredRecords.length / pageSize) || 1;
   const paginatedRecords = filteredRecords.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -177,11 +210,33 @@ export default function History() {
           <button
             onClick={handleExportCSV}
             disabled={filteredRecords.length === 0}
-            className="px-4 py-2.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition flex items-center gap-2 disabled:opacity-40"
+            className="px-3.5 py-2.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-40"
+            title="Download CSV report"
           >
             <Download className="h-4 w-4" />
-            <span>Export CSV</span>
+            <span>CSV</span>
           </button>
+
+          <button
+            onClick={handleExportJSON}
+            disabled={filteredRecords.length === 0}
+            className="px-3.5 py-2.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-40"
+            title="Download JSON report"
+          >
+            <Download className="h-4 w-4" />
+            <span>JSON</span>
+          </button>
+
+          {records.length > 0 && user?.id && (
+            <button
+              onClick={() => setShowClearAllModal(true)}
+              className="px-3.5 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-bold transition flex items-center gap-1.5"
+              title="Delete all history"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>Clear All</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -457,6 +512,40 @@ export default function History() {
                 className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
               >
                 {deleting ? 'Deleting...' : 'Confirm Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear All Confirmation Modal */}
+      {showClearAllModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-[#0d1527] border border-red-500/30 rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+            <div className="p-3 rounded-2xl bg-red-500/10 text-red-400 border border-red-500/30 w-fit">
+              <Trash2 className="h-6 w-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">Purge All Detection History?</h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Are you sure you want to permanently delete all {records.length} scan records for your account? This action cannot be reversed.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowClearAllModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={handleClearAllHistory}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {deleting ? 'Purging...' : 'Purge All Records'}
               </button>
             </div>
           </div>
