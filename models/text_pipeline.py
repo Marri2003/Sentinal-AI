@@ -331,9 +331,12 @@ class TextPipeline:
         self.max_length = TEXT_MODEL_CONFIG["max_length"]
         self.model_loaded = False
 
-        # Determine tokenizer path
+        # Determine tokenizer path (prefer local directory if exists, otherwise base model)
         if tokenizer_path is None:
-            tokenizer_path = TEXT_TOKENIZER_PATH if TEXT_TOKENIZER_PATH else TEXT_MODEL_CONFIG["model_name"]
+            if TEXT_TOKENIZER_PATH and os.path.exists(str(TEXT_TOKENIZER_PATH)):
+                tokenizer_path = str(TEXT_TOKENIZER_PATH)
+            else:
+                tokenizer_path = TEXT_MODEL_CONFIG["model_name"]
 
         # Load tokenizer (trained or pretrained)
         try:
@@ -349,6 +352,16 @@ class TextPipeline:
 
         # Load trained weights if available
         model_path = model_path or TEXT_MODEL_PATH
+        if model_path and not os.path.exists(model_path):
+            hf_repo = os.getenv("HF_MODEL_REPO", "marrideepak/sentinelai-model")
+            try:
+                from huggingface_hub import hf_hub_download
+                logger.info(f"Downloading model weights from Hugging Face Model Hub ({hf_repo})...")
+                model_path = hf_hub_download(repo_id=hf_repo, filename="text_model.pth")
+                logger.info(f"✓ Downloaded model weights to {model_path}")
+            except Exception as e:
+                logger.warning(f"Could not download model from Hugging Face Model Hub ({hf_repo}): {e}")
+
         if model_path and os.path.exists(model_path):
             try:
                 self.model.load_state_dict(torch.load(model_path, map_location=self.device))

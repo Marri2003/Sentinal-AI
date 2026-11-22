@@ -55,9 +55,11 @@ git checkout -b huggingface
 :: 4. Copy Hugging Face README with Gradio YAML frontmatter
 copy /y hf_space_readme.md README.md >nul
 
-:: 5. Force-add all backend files, models, packages.txt, and app.py
-echo [✓] Staging backend models with Git LFS (this may take a moment)...
-git add -f saved_models/
+:: 5. Force-add backend files, metadata models, tokenizer, and microservice code
+echo [✓] Staging backend files, lightweight models, and tokenizer...
+git add -f saved_models/metadata_model.pth
+git add -f saved_models/metadata_scaler.pkl
+git add -f saved_models/text_tokenizer/
 git add app.py packages.txt requirements.txt config.py
 git add app/ models/ fusion/ utils/ README.md .gitattributes
 

@@ -13,10 +13,10 @@ pandas>=2.1.0
 scikit-learn>=1.4.0
 tqdm>=4.66.0
 
-# Deep learning & HF Hub (PyTorch pre-installed by HF Spaces)
+# Deep learning & HF Hub (hf-hub<0.26.0 required for Gradio 4.44 HfFolder compatibility)
 transformers>=4.36.2
 sentencepiece>=0.1.99
-huggingface-hub>=0.23.0
+huggingface-hub<0.26.0
 
 # Image OCR and preprocessing (headless for container environments)
 Pillow>=10.0.0
