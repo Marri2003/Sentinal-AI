@@ -18,6 +18,7 @@ import {
   signIn, 
   signUp, 
   signOut, 
+  resendConfirmation,
   getUserScanHistory, 
   isSupabaseConfigured 
 } from '../services/supabase';
@@ -31,6 +32,8 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [message, setMessage] = useState(null);
@@ -80,6 +83,24 @@ export default function Auth() {
       setError(err.message || 'Authentication operation failed.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!email.trim()) {
+      setError('Please enter your email address in the field below to resend confirmation.');
+      return;
+    }
+    setResending(true);
+    setResendMessage(null);
+    try {
+      const { error: resendErr } = await resendConfirmation(email.trim());
+      if (resendErr) throw resendErr;
+      setResendMessage('Verification email sent! Check your inbox & spam folder.');
+    } catch (err) {
+      setError(err.message || 'Failed to resend confirmation link.');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -277,9 +298,31 @@ export default function Auth() {
         )}
 
         {error && (
-          <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
-            <span>{error}</span>
+          <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex flex-col gap-2">
+            <div className="flex items-center gap-2 font-medium">
+              <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+            {error.toLowerCase().includes('email not confirmed') && (
+              <div className="pt-2 border-t border-red-200/60 flex flex-col gap-2 text-slate-700">
+                <p>
+                  Your account requires email verification. Check your inbox and spam folder for the confirmation link.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={resending}
+                    onClick={handleResendConfirmation}
+                    className="px-3 py-1.5 bg-primary text-white rounded-lg text-2xs font-bold uppercase tracking-wider hover:bg-orange-600 disabled:opacity-50 transition shadow-xs"
+                  >
+                    {resending ? 'Sending...' : 'Resend Confirmation Email'}
+                  </button>
+                  {resendMessage && (
+                    <span className="text-green-700 font-semibold">{resendMessage}</span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

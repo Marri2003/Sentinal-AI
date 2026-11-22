@@ -53,6 +53,19 @@ export async function signIn(email, password) {
 }
 
 /**
+ * Resend email confirmation link for an unconfirmed user
+ */
+export async function resendConfirmation(email) {
+  if (!supabase) {
+    return { data: null, error: { message: 'Supabase is not configured yet. Add credentials to .env.' } };
+  }
+  return await supabase.auth.resend({
+    type: 'signup',
+    email,
+  });
+}
+
+/**
  * Sign out current user
  */
 export async function signOut() {

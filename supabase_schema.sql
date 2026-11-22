@@ -102,3 +102,11 @@ begin
     return threat_count;
 end;
 $$ language plpgsql security definer;
+
+-- ====================================================================
+-- 5. Operational Fix: Confirm All Existing Unconfirmed Accounts
+-- If users are blocked by "Email not confirmed" in production, run this:
+-- UPDATE auth.users
+-- SET email_confirmed_at = now()
+-- WHERE email_confirmed_at IS NULL;
+-- ====================================================================
