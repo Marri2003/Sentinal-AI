@@ -15,9 +15,18 @@ import uvicorn
 from app.main import app as fastapi_app
 
 try:
+    import spaces
+except ImportError:
+    class spaces:
+        @staticmethod
+        def GPU(func):
+            return func
+
+try:
     import gradio as gr
 
     # Build an interactive preview UI for direct testing inside Hugging Face
+    @spaces.GPU
     def gradio_predict(sms_text, sender_id, url_input):
         import urllib.request
         import json
