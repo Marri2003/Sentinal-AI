@@ -4,6 +4,15 @@ Serves the complete FastAPI multi-modal phishing detection microservice
 along with an interactive Gradio inspection UI on port 7860.
 """
 
+# IMPORTANT: 'import spaces' must be the very first import before CUDA/torch initializes
+try:
+    import spaces
+except ImportError:
+    class spaces:
+        @staticmethod
+        def GPU(func):
+            return func
+
 import os
 import sys
 from pathlib import Path
@@ -13,14 +22,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import uvicorn
 from app.main import app as fastapi_app
-
-try:
-    import spaces
-except ImportError:
-    class spaces:
-        @staticmethod
-        def GPU(func):
-            return func
 
 try:
     import gradio as gr
