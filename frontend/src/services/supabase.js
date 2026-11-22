@@ -1,10 +1,11 @@
 /**
- * SentinelAI Supabase Client & Resilient Telemetry Service
- * Implements a dual-tier persistence architecture:
- * 1. Cloud Supabase PostgreSQL (analyses & profiles tables with RLS)
- * 2. High-reliability client-side persistent cache (per-user scoped)
- * 
- * Guarantees zero data loss, instant dashboard synchronization, and offline resilience.
+ * SentinelAI Supabase Client & Production Cloud Telemetry Service
+ * Implements authoritative PostgreSQL cloud persistence with local resilience:
+ * 1. Cloud Supabase PostgreSQL (analyses & profiles tables with RLS) is the PERMANENT SOURCE OF TRUTH.
+ * 2. Automatic retry with exponential backoff for temporary network failures.
+ * 3. Stable UUID primary keys for guaranteed duplicate prevention on upsert/sync.
+ * 4. Transparent sync tracking: 'synced' | 'pending' | 'failed' with visible error logging.
+ * 5. Automatic background synchronization of pending records when cloud is reachable.
  */
 import { createClient } from '@supabase/supabase-js';
 
@@ -49,13 +50,12 @@ export function getLocalScans(userId) {
 }
 
 /**
- * Save a scan record into local cache (prepend newest first, max 200 items)
+ * Save or update a scan record in the local cache
  */
 export function saveLocalScan(userId, record) {
   try {
     const key = getStorageKey(userId);
     const existing = getLocalScans(userId);
-    // Deduplicate if existing ID
     const filtered = existing.filter(item => item.id !== record.id);
     const updated = [record, ...filtered].slice(0, 200);
     localStorage.setItem(key, JSON.stringify(updated));
@@ -167,10 +167,24 @@ export function onAuthStateChange(callback) {
 }
 
 /**
- * Log a scan result to the database with multi-tier fallback.
- * 1. Immediately writes to user-scoped local cache (guarantees 0-loss and instant update).
- * 2. Attempts insert into Supabase 'analyses' table.
- * 3. Returns the saved record object with telemetry source indicator.
+ * Retry helper with exponential backoff for database writes
+ */
+async function retryWithBackoff(fn, retries = 2, delayMs = 400) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt === retries) throw err;
+      await new Promise(r => setTimeout(r, delayMs * Math.pow(2, attempt)));
+    }
+  }
+}
+
+/**
+ * Log a scan result to the cloud database with confirmation and local resilience.
+ * - Primary: Cloud Supabase PostgreSQL 'analyses' table
+ * - Fallback: Client-side storage with explicit 'pending' status
+ * - Never silently discards database errors.
  */
 export async function logScanToCommunity({
   userId = null,
@@ -184,7 +198,7 @@ export async function logScanToCommunity({
   pipelineScores,
   explainability,
 }) {
-  // Resolve user ID
+  // Resolve user ID from session if not explicitly passed
   let resolvedUserId = userId;
   if (!resolvedUserId && supabase) {
     try {
@@ -195,6 +209,7 @@ export async function logScanToCommunity({
     }
   }
 
+  // Stable UUID for primary key and duplicate prevention
   const recordId = typeof crypto !== 'undefined' && crypto.randomUUID 
     ? crypto.randomUUID() 
     : `scan_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -216,61 +231,115 @@ export async function logScanToCommunity({
     pipeline_scores: pipelineScores || {},
     explainability: explainability || {},
     created_at: createdAt,
-    synced_to_cloud: false
+    sync_status: 'pending',
+    last_sync_error: null
   };
 
-  // 1. Immediately persist to client-side local cache
+  // 1. Immediately cache locally with 'pending' status
   saveLocalScan(resolvedUserId, scanRecord);
 
-  // 2. Attempt cloud persistence to Supabase PostgreSQL table
-  if (supabase) {
+  // 2. Perform authoritative cloud insert to Supabase PostgreSQL
+  if (supabase && isSupabaseConfigured) {
     try {
-      const { data, error } = await supabase
-        .from('analyses')
-        .insert({
-          id: recordId,
-          user_id: resolvedUserId,
-          message_text: scanRecord.message_text,
-          sender: scanRecord.sender,
-          phone: scanRecord.phone,
-          detected_url: scanRecord.detected_url,
-          risk_score: scanRecord.risk_score,
-          risk_level: scanRecord.risk_level,
-          decision: scanRecord.decision,
-          pipeline_scores: scanRecord.pipeline_scores,
-          explainability: scanRecord.explainability,
-          created_at: createdAt
-        })
-        .select('*')
-        .single();
+      const cloudResult = await retryWithBackoff(async () => {
+        const { data, error } = await supabase
+          .from('analyses')
+          .insert({
+            id: recordId,
+            user_id: resolvedUserId,
+            message_text: scanRecord.message_text,
+            sender: scanRecord.sender,
+            phone: scanRecord.phone,
+            detected_url: scanRecord.detected_url,
+            risk_score: scanRecord.risk_score,
+            risk_level: scanRecord.risk_level,
+            decision: scanRecord.decision,
+            pipeline_scores: scanRecord.pipeline_scores,
+            explainability: scanRecord.explainability,
+            created_at: createdAt
+          })
+          .select('*')
+          .single();
 
-      if (error) {
-        console.warn('Supabase cloud insert warning (cached locally):', error.message);
-        return { data: scanRecord, error: null, source: 'LOCAL_CACHE' };
-      }
+        if (error) throw error;
+        return data;
+      }, 1, 500);
 
-      if (data) {
-        scanRecord.synced_to_cloud = true;
+      if (cloudResult) {
+        // Confirmation of successful cloud persistence
+        scanRecord.sync_status = 'synced';
+        scanRecord.last_sync_error = null;
         saveLocalScan(resolvedUserId, scanRecord);
-        return { data, error: null, source: 'SUPABASE' };
+        console.log('✓ Cloud persistence confirmed on Supabase PostgreSQL:', recordId);
+        return { data: cloudResult, error: null, sync_status: 'synced', source: 'SUPABASE_CLOUD' };
       }
-    } catch (err) {
-      console.warn('Supabase cloud network error (cached locally):', err);
+    } catch (dbErr) {
+      scanRecord.sync_status = 'failed';
+      scanRecord.last_sync_error = dbErr.message || 'Database write rejected';
+      saveLocalScan(resolvedUserId, scanRecord);
+      console.error('[Sentinel Cloud Persistence Error]:', dbErr.message || dbErr);
+      return { data: scanRecord, error: dbErr.message, sync_status: 'failed', source: 'LOCAL_FALLBACK' };
     }
   }
 
-  return { data: scanRecord, error: null, source: 'LOCAL_CACHE' };
+  return { data: scanRecord, error: 'Supabase unconfigured', sync_status: 'pending', source: 'LOCAL_CACHE' };
 }
 
 /**
- * Retrieve user scans with unified merging between Supabase and local cache.
- * Guarantees that records are ALWAYS returned, even if Supabase table is unmigrated.
+ * Synchronize previously cached pending/failed records to Supabase
+ * Prevents duplicates by using stable UUID primary keys and upsert logic.
+ */
+export async function syncPendingRecords(userId) {
+  if (!supabase || !isSupabaseConfigured) return;
+
+  const localItems = getLocalScans(userId);
+  const pendingItems = localItems.filter(item => item.sync_status === 'pending' || item.sync_status === 'failed');
+
+  if (pendingItems.length === 0) return;
+
+  for (const item of pendingItems) {
+    try {
+      const { data, error } = await supabase
+        .from('analyses')
+        .upsert({
+          id: item.id,
+          user_id: item.user_id,
+          message_text: item.message_text,
+          sender: item.sender,
+          phone: item.phone,
+          detected_url: item.detected_url,
+          risk_score: item.risk_score,
+          risk_level: item.risk_level,
+          decision: item.decision,
+          pipeline_scores: item.pipeline_scores,
+          explainability: item.explainability,
+          created_at: item.created_at
+        }, { onConflict: 'id' })
+        .select('id')
+        .single();
+
+      if (!error && data) {
+        item.sync_status = 'synced';
+        item.last_sync_error = null;
+        saveLocalScan(userId, item);
+      }
+    } catch (syncErr) {
+      console.warn('Pending sync retry failed for record:', item.id, syncErr.message);
+    }
+  }
+}
+
+/**
+ * Retrieve user scans with Supabase PostgreSQL as the AUTHORITATIVE source of truth.
+ * - Primary: Reads actual database records from Supabase cloud.
+ * - Synchronizes any pending local scans.
+ * - Falls back to local cache only if network or permissions fail, clearly indicating sync state.
  */
 export async function getUserScans(userId, limit = 100) {
-  let cloudRecords = [];
-  let cloudSuccess = false;
+  let cloudRecords = null;
+  let cloudError = null;
 
-  // 1. Attempt Supabase Query
+  // 1. Fetch from authoritative Supabase PostgreSQL database
   if (supabase && isSupabaseConfigured) {
     try {
       let query = supabase
@@ -287,29 +356,43 @@ export async function getUserScans(userId, limit = 100) {
       const { data, error } = await query;
       if (!error && data) {
         cloudRecords = data;
-        cloudSuccess = true;
+        // Trigger background sync for any unsynced local records
+        syncPendingRecords(userId).catch(() => {});
       } else if (error) {
-        console.warn('Supabase query notice:', error.message);
+        cloudError = error.message;
+        console.error('[Sentinel Cloud Read Error]:', error.message, error.hint || '');
       }
     } catch (err) {
-      console.warn('Supabase query error:', err);
+      cloudError = err.message;
+      console.error('[Sentinel Cloud Network Error]:', err);
     }
   }
 
-  // 2. Retrieve local cache for this user
-  const localRecords = getLocalScans(userId);
-
-  // 3. If cloud query succeeded, merge and update cache
-  if (cloudSuccess) {
+  // 2. If cloud read was successful, merge any in-flight pending local items not yet in cloud
+  if (cloudRecords !== null) {
     const cloudIds = new Set(cloudRecords.map(r => r.id));
-    // Find local records that have not synced yet
-    const pendingSync = localRecords.filter(r => !cloudIds.has(r.id));
-    const merged = [...pendingSync, ...cloudRecords];
-    return merged.slice(0, limit);
+    const localItems = getLocalScans(userId);
+    const inFlightPending = localItems.filter(item => item.sync_status !== 'synced' && !cloudIds.has(item.id));
+    
+    // Tag records with cloud telemetry metadata
+    const finalRecords = [...inFlightPending, ...cloudRecords].slice(0, limit).map(r => ({
+      ...r,
+      source: cloudIds.has(r.id) ? 'SUPABASE_CLOUD' : 'IN_FLIGHT_SYNC'
+    }));
+
+    finalRecords.cloudSynced = true;
+    finalRecords.cloudError = null;
+    return finalRecords;
   }
 
-  // 4. If cloud query failed or not configured, return full local cache
-  return localRecords.slice(0, limit);
+  // 3. Fallback to local cache if cloud database is unreachable / permissions pending
+  const fallbackRecords = getLocalScans(userId).slice(0, limit).map(r => ({
+    ...r,
+    source: 'LOCAL_FALLBACK'
+  }));
+  fallbackRecords.cloudSynced = false;
+  fallbackRecords.cloudError = cloudError || 'Supabase unavailable';
+  return fallbackRecords;
 }
 
 /**
@@ -320,10 +403,11 @@ export async function deleteUserScan(scanId, userId) {
 
   if (supabase && isSupabaseConfigured) {
     try {
-      await supabase
+      const { error } = await supabase
         .from('analyses')
         .delete()
         .eq('id', scanId);
+      if (error) console.error('[Sentinel DB Delete Error]:', error.message);
     } catch (err) {
       console.warn('Supabase delete error:', err);
     }
@@ -339,10 +423,11 @@ export async function clearAllUserScans(userId) {
 
   if (supabase && isSupabaseConfigured && userId) {
     try {
-      await supabase
+      const { error } = await supabase
         .from('analyses')
         .delete()
         .eq('user_id', userId);
+      if (error) console.error('[Sentinel DB Clear All Error]:', error.message);
     } catch (err) {
       console.warn('Supabase clear all error:', err);
     }

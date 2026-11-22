@@ -14,7 +14,9 @@ import {
   Zap, 
   Lock,
   Database,
-  ExternalLink
+  ExternalLink,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../App';
 import { supabase, isSupabaseConfigured, getUserScans, getCommunitySpamCount } from '../services/supabase';
@@ -22,6 +24,8 @@ import { supabase, isSupabaseConfigured, getUserScans, getCommunitySpamCount } f
 export default function Dashboard() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [cloudSynced, setCloudSynced] = useState(false);
+  const [cloudError, setCloudError] = useState(null);
   const [stats, setStats] = useState({
     totalScans: 0,
     phishingCount: 0,
@@ -49,8 +53,10 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch user-specific scan records via unified dual-tier service (cloud + local sync)
+      // 1. Fetch user-specific scan records via authoritative cloud service
       const userRecords = await getUserScans(user?.id || null);
+      setCloudSynced(userRecords.cloudSynced ?? false);
+      setCloudError(userRecords.cloudError ?? null);
 
       // 2. Calculate actual real statistics from database rows
       const total = userRecords.length;
@@ -98,9 +104,25 @@ export default function Dashboard() {
         <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2 max-w-xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono font-bold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
-              <Activity className="h-3.5 w-3.5 animate-pulse" />
-              <span>LIVE DEFENSE TELEMETRY</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono font-bold bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+                <Activity className="h-3.5 w-3.5 animate-pulse" />
+                <span>LIVE DEFENSE TELEMETRY</span>
+              </div>
+              {cloudSynced ? (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>SUPABASE CLOUD (AUTHORITATIVE)</span>
+                </div>
+              ) : (
+                <div 
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-amber-500/10 border border-amber-500/30 text-amber-400"
+                  title={cloudError || 'Cloud synchronization pending'}
+                >
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  <span>{cloudError?.includes('permission') ? 'GRANT PERMISSIONS REQUIRED' : 'LOCAL CACHE (SYNC PENDING)'}</span>
+                </div>
+              )}
             </div>
             <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight">
               AI-Powered Threat Protection Center
