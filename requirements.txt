@@ -14,11 +14,9 @@ pandas==2.1.4
 scikit-learn==1.4.0
 tqdm==4.66.1
 
-# Deep learning (CPU baseline; install CUDA-specific PyTorch separately if needed)
-torch==2.1.2
-torchvision==0.16.2
-transformers==4.36.2
-sentencepiece==0.1.99
+# Deep learning (Hugging Face Spaces pre-installs compatible PyTorch)
+transformers>=4.36.2
+sentencepiece>=0.1.99
 
 # Image OCR and preprocessing
 Pillow==10.2.0
