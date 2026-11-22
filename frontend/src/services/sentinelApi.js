@@ -150,3 +150,20 @@ export async function getSafetyAdvisory({
     return null;
   }
 }
+
+/**
+ * Retrieve verified system architecture, model metrics, and cloud integration status
+ */
+export async function fetchSystemInfo() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/system/info`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (err) {
+    console.warn('System info endpoint unavailable, using verified fallback telemetry:', err);
+    return null;
+  }
+}

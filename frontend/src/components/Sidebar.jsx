@@ -54,6 +54,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
     { name: 'Detection History', path: '/history', icon: History },
     { name: 'Security Analytics', path: '/analytics', icon: BarChart3 },
     { name: 'Incident Reports', path: '/reports', icon: FileText },
+    { name: 'About Sentinel-AI', path: '/about', icon: ShieldCheck },
     { name: 'My Account', path: '/account', icon: User },
     { name: 'Settings', path: '/settings', icon: Settings },
     { name: 'Help & Docs', path: '/help', icon: HelpCircle },
