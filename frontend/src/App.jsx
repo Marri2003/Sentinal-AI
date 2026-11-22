@@ -57,6 +57,7 @@ export default function App() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/help" element={<Help />} />
             <Route path="/about" element={<About />} />
+            <Route path="/architecture" element={<About defaultTab="architecture" />} />
             <Route path="/demo" element={<Demo />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

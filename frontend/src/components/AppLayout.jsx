@@ -26,6 +26,8 @@ export default function AppLayout() {
         return { title: 'Platform Settings', subtitle: 'Configure detection thresholds and API integrations' };
       case '/help':
         return { title: 'Documentation & Knowledge Base', subtitle: 'Architecture specs, API reference, and FAQ' };
+      case '/architecture':
+        return { title: 'System Architecture & Engineering Specs', subtitle: 'Interactive Mermaid diagrams, multi-modal pipeline flowcharts & cloud topology' };
       case '/about':
         return { title: 'About Sentinel-AI & Architecture', subtitle: 'Technical specifications, verified model benchmarks, detection pipelines & infrastructure' };
       case '/auth':
