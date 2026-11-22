@@ -103,7 +103,11 @@ export default function MermaidDiagram({
         const safeId = `mermaid_${String(id).replace(/[^a-zA-Z0-9_]/g, '_')}_${Math.random().toString(36).substring(2, 8)}`;
         const { svg } = await mermaid.render(safeId, chart);
         if (isMounted) {
-          setSvgContent(svg);
+          if (svg && (svg.includes('Syntax error') || svg.includes('syntax error') || svg.includes('error-icon') || svg.includes('dmermaid'))) {
+            setRenderError('Interactive diagram source ready');
+          } else {
+            setSvgContent(svg);
+          }
         }
       } catch (err) {
         console.warn('Mermaid render issue (showing code view):', err);

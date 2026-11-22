@@ -162,19 +162,19 @@ export default function About({ defaultTab = 'architecture' }) {
   // =========================================================================
 
   const chartComplete = `flowchart TD
-    User(["Client Browser / User Device"]) -->|1. HTTPS Request| Frontend["Vercel Frontend (React 18 SPA)"]
+    User["Client Browser / User Device"] -->|1. HTTPS Request| Frontend["Vercel Frontend (React 18 SPA)"]
     
     subgraph Supabase_Auth ["Supabase Identity Layer"]
-        Frontend <-->|Auth Tokens / Session Check| Auth["Supabase GoTrue JWT Auth"]
+        Frontend -->|Auth Tokens and Session Check| Auth["Supabase GoTrue JWT Auth"]
         Auth --> Session["Authenticated User Session"]
     end
     
-    subgraph HF_Microservice ["Hugging Face Production Microservice (FastAPI + Gradio SDK)"]
-        Frontend -->|2. POST /predict| Router["FastAPI Input Router & Validator"]
+    subgraph HF_Microservice ["Hugging Face Production Microservice (FastAPI and Gradio SDK)"]
+        Frontend -->|2. POST /predict| Router["FastAPI Input Router and Validator"]
         
-        Router -->|"text"| P1["Pipeline 1: Text Semantics"]
-        Router -->|"metadata (url, sender)"| P2["Pipeline 2: Metadata Feature Extractor"]
-        Router -->|"image (base64)"| P3["Pipeline 3: Image / OCR Preprocessor"]
+        Router -->|text| P1["Pipeline 1: Text Semantics"]
+        Router -->|metadata| P2["Pipeline 2: Metadata Feature Extractor"]
+        Router -->|image| P3["Pipeline 3: Image / OCR Preprocessor"]
         
         subgraph Text_Model ["Text Model"]
             P1 --> XLM["XLM-RoBERTa (278M params)<br/>SentencePiece BPE Tokenizer"]
@@ -183,18 +183,18 @@ export default function About({ defaultTab = 'architecture' }) {
         
         subgraph Metadata_Model ["Metadata Model"]
             P2 --> Feat15["15-Feature Vector<br/>StandardScaler Normalization"]
-            Feat15 --> FFNN["Feedforward Neural Net (FFNN)<br/>15 -> 64 -> 32 -> 16 -> 2"]
+            Feat15 --> FFNN["Feedforward Neural Net (FFNN)<br/>15 to 64 to 32 to 16 to 2"]
             FFNN --> MetaScore["Metadata Risk Score (0.0 - 1.0)"]
         end
         
         subgraph OCR_Model ["Vision OCR"]
-            P3 --> CV["OpenCV Preprocessing<br/>Adaptive Gaussian + fastNlMeans"]
+            P3 --> CV["OpenCV Preprocessing<br/>Adaptive Gaussian and fastNlMeans"]
             CV --> Tesseract["Tesseract OCR v5.5<br/>(hin, tel, eng)"]
             Tesseract -->|Extracted Text| P1
             Tesseract --> OCRScore["OCR Extracted Text Score"]
         end
         
-        TextScore --> Fusion["Weighted Late Decision Fusion Engine<br/>Base Weights: 60% Text, 20% Meta, 20% Image<br/>Adaptive Missing Modality Redistribution<br/>Trusted Domain & Sender Whitelist Rules"]
+        TextScore --> Fusion["Weighted Late Decision Fusion Engine<br/>Base Weights: 60% Text, 20% Meta, 20% Image<br/>Adaptive Missing Modality Redistribution<br/>Trusted Domain and Sender Whitelist Rules"]
         MetaScore --> Fusion
         OCRScore --> Fusion
         
@@ -204,27 +204,27 @@ export default function About({ defaultTab = 'architecture' }) {
     Decision -->|3. Synchronous Response| Frontend
     
     subgraph Groq_Advisory ["Groq Cloud Inference (Async Parallel)"]
-        Frontend -->|4. POST /advisory & /justify| AdvisoryAPI["Advisory Endpoint"]
+        Frontend -->|4. POST /advisory and /justify| AdvisoryAPI["Advisory Endpoint"]
         AdvisoryAPI --> Groq["Groq Cloud API (Llama 3.1 8B)<br/>GROQ_API_KEY"]
         Groq --> AdvisoryCard["Structured Safety Advisory Card<br/>Contextual Guidance on PII, Fees, UPI"]
     end
     
     subgraph Supabase_DB ["Supabase PostgreSQL (Authoritative Cloud Source)"]
         Frontend -->|5. PostgREST with RLS| DB["public.analyses Table<br/>Cloud Telemetry Log"]
-        DB --> Analytics["Security Analytics & Dashboard<br/>Historical Threat Audit Logs"]
+        DB --> Analytics["Security Analytics and Dashboard<br/>Historical Threat Audit Logs"]
         Analytics --> Frontend
     end
     
     AdvisoryCard --> Frontend`;
 
   const chartTextPipeline = `flowchart LR
-    Msg["Raw SMS / Message Text"] --> Pre["Text Preprocessing<br/>Regex Normalization & Whitespace Strip"]
+    Msg["Raw SMS / Message Text"] --> Pre["Text Preprocessing<br/>Regex Normalization and Whitespace Strip"]
     Pre --> Tok["SentencePiece BPE Tokenizer<br/>max_length = 128 tokens"]
     Tok --> Enc["XLM-RoBERTa Transformer Encoder<br/>12-Layer, 768-Hidden, 12-Heads<br/>278 Million Parameters"]
     Enc --> Cls["Pooled [CLS] Token Representation<br/>Vector Size: 768"]
     Enc --> Attn["Eager Self-Attention Weights Matrix<br/>Per-Token Attribution Scoring"]
     Cls --> Drop["Dropout (p = 0.3)"]
-    Drop --> Head["Classification Head<br/>Linear Layer (768 -> 2)"]
+    Drop --> Head["Classification Head<br/>Linear Layer (768 to 2)"]
     Head --> Softmax["Softmax Activation"]
     Softmax --> Prob["Spam Probability Output (0.0 - 1.0)"]
     Attn --> Tokens["Trigger Token Highlight Map<br/>(e.g., 'blocked', 'KYC', 'link')"]`;
@@ -253,18 +253,18 @@ export default function About({ defaultTab = 'architecture' }) {
     Features --> Scaler["StandardScaler Normalization<br/>metadata_scaler.pkl"]
     Scaler --> Tensor["PyTorch FloatTensor (1, 15)"]
     
-    subgraph FFNN_Arch ["FFNN Classifier (15 -> 64 -> 32 -> 16 -> 2)"]
-        Tensor --> L1["Linear (15 -> 64) + ReLU + Dropout(0.3)"]
-        L1 --> L2["Linear (64 -> 32) + ReLU + Dropout(0.3)"]
-        L2 --> L3["Linear (32 -> 16) + ReLU + Dropout(0.3)"]
-        L3 --> L4["Linear (16 -> 2)"]
+    subgraph FFNN_Arch ["FFNN Classifier (15 to 64 to 32 to 16 to 2)"]
+        Tensor --> L1["Linear (15 to 64) + ReLU + Dropout(0.3)"]
+        L1 --> L2["Linear (64 to 32) + ReLU + Dropout(0.3)"]
+        L2 --> L3["Linear (32 to 16) + ReLU + Dropout(0.3)"]
+        L3 --> L4["Linear (16 to 2)"]
     end
     
     L4 --> MetaSoftmax["Softmax Activation"]
     MetaSoftmax --> MetaProb["Metadata Phishing Score (0.0 - 1.0)<br/>Feature Importance Attribution"]`;
 
   const chartImagePipeline = `flowchart TD
-    ImgInput["Screenshot Upload<br/>(Base64 / Multipart PNG/JPG)"] --> Decode["Image Decompression & PIL Loading"]
+    ImgInput["Screenshot Upload<br/>(Base64 / Multipart PNG/JPG)"] --> Decode["Image Decompression and PIL Loading"]
     
     subgraph CV_Pipe ["Computer Vision Preprocessing"]
         Decode --> Gray["1. Grayscale Conversion"]
@@ -278,17 +278,17 @@ export default function About({ defaultTab = 'architecture' }) {
         Langs --> RawText["Extracted String Buffer"]
     end
     
-    RawText --> Check{"Text Length >= 5 chars?"}
-    Check -->|No / Blank| Fallback["image_score = None<br/>(Modality Excluded from Fusion)"]
+    RawText --> Check{"Is Text Length at least 5 chars?"}
+    Check -->|No or Blank| Fallback["image_score = None<br/>(Modality Excluded from Fusion)"]
     Check -->|Yes| Fwd["Forward to TextPipeline (XLM-RoBERTa)<br/>models/text_pipeline.py"]
     Fwd --> ImgScore["Image Risk Score (0.0 - 1.0)<br/>+ OCR Transcribed Content Display"]`;
 
   const chartFusion = `flowchart TD
     Inputs["Individual Pipeline Probabilities<br/>Text Score, Metadata Score, Image Score"] --> AvailCheck{"Check Available Modalities<br/>(Zero-Penalty Exclusion)"}
     
-    AvailCheck -->|All 3 Available| W3["Text: 60% | Metadata: 20% | Image: 20%"]
-    AvailCheck -->|Image Missing| W2A["Text: 75% | Metadata: 25%"]
-    AvailCheck -->|Metadata Missing| W2B["Text: 75% | Image: 25%"]
+    AvailCheck -->|All 3 Available| W3["Text: 60% • Metadata: 20% • Image: 20%"]
+    AvailCheck -->|Image Missing| W2A["Text: 75% • Metadata: 25%"]
+    AvailCheck -->|Metadata Missing| W2B["Text: 75% • Image: 25%"]
     AvailCheck -->|Only Text Available| W1A["Text: 100%"]
     AvailCheck -->|Only Metadata Available| W1B["Metadata: 100%"]
     AvailCheck -->|Only Image Available| W1C["Image: 100%"]
@@ -300,41 +300,41 @@ export default function About({ defaultTab = 'architecture' }) {
     W1B --> WeightedSum
     W1C --> WeightedSum
     
-    subgraph SafetyRules ["Deterministic Safety Rules & Whitelists"]
-        WhitelistCheck{"Trusted Domain or Sender?<br/>TRUSTED_DOMAINS / TRUSTED_SENDERS"}
+    subgraph SafetyRules ["Deterministic Safety Rules and Whitelists"]
+        WhitelistCheck{"Is Domain or Sender Whitelisted?"}
         WhitelistCheck -->|Match Found| ForceSafe["Clamp Score to 0.0 (HAM)<br/>(e.g., SBIINB, HDFCBK, gov.in)"]
-        WhitelistCheck -->|No Match| Clamping["Score Clamping [0.001, 0.999]"]
+        WhitelistCheck -->|No Match| Clamping["Score Clamping (0.001 to 0.999)"]
     end
     
     WeightedSum --> WhitelistCheck
     ForceSafe --> FinalScore["Final Combined Threat Score (0.0 - 1.0)"]
     Clamping --> FinalScore
     
-    FinalScore --> ThreshCheck{"Score >= SPAM_THRESHOLD (0.60)?"}
+    FinalScore --> ThreshCheck{"Is Score at least 0.60?"}
     ThreshCheck -->|Yes| SPAM["Verdict: SPAM (Phishing Detected)"]
     ThreshCheck -->|No| HAM["Verdict: HAM (Legitimate Message)"]
     
-    SPAM --> Conf["Assign Confidence Level:<br/>HIGH: > 0.85 or < 0.15<br/>MEDIUM: 0.60 - 0.85 or 0.15 - 0.40<br/>LOW: 0.40 - 0.60"]
+    SPAM --> Conf["Assign Confidence Level:<br/>HIGH: Above 0.85 or Below 0.15<br/>MEDIUM: 0.60-0.85 or 0.15-0.40<br/>LOW: 0.40 - 0.60"]
     HAM --> Conf`;
 
   const chartSafetyAdvisory = `flowchart TD
     MsgInput["Original User Message Text<br/>+ OCR Extracted Text + ML Prediction"] --> Req["POST /advisory Endpoint"]
     
-    subgraph Prompt_Engine ["Prompt Engineering & Injection Defenses"]
+    subgraph Prompt_Engine ["Prompt Engineering and Injection Defenses"]
         Req --> Guard["System Prompt Guardrails<br/>Enforce Independent Educational Assessment"]
-        Guard --> Schema["Structured Output JSON Schema<br/>advisory_level: HIGH | MODERATE | LOW"]
+        Guard --> Schema["Structured Output JSON Schema<br/>advisory_level: HIGH • MODERATE • LOW"]
     end
     
-    Schema --> GroqCheck{"Is GROQ_API_KEY Configured & Reachable?"}
+    Schema --> GroqCheck{"Is Groq API Key Active?"}
     
     subgraph Groq_Call ["Groq Cloud Inference"]
         GroqCheck -->|Yes| GroqAPI["Groq Chat Completions API<br/>Model: llama-3.1-8b-instant<br/>Sub-200ms Execution"]
-        GroqAPI --> Evaluator["8 Risk Dimension Evaluator:<br/>1. PII Solicitations<br/>2. Aadhaar & PAN Card Requests<br/>3. OTP & Password Extraction<br/>4. Upfront Processing/Job Fees<br/>5. Suspicious Payment & UPI QR<br/>6. Unverified HR/WhatsApp Handles<br/>7. Recruitment Scam Traps<br/>8. Urgent Coercive Claims"]
+        GroqAPI --> Evaluator["8 Risk Dimension Evaluator:<br/>1. PII Solicitations<br/>2. Aadhaar and PAN Card Requests<br/>3. OTP and Password Extraction<br/>4. Upfront Processing/Job Fees<br/>5. Suspicious Payment and UPI QR<br/>6. Unverified HR/WhatsApp Handles<br/>7. Recruitment Scam Traps<br/>8. Urgent Coercive Claims"]
         Evaluator --> LLMResp["LLM Structured Advisory Response"]
     end
     
     subgraph Fallback_Engine ["Zero-Downtime Deterministic Fallback"]
-        GroqCheck -->|No / Network Error / Rate Limit| FallbackFunc["generate_grounded_fallback_advisory()<br/>Heuristic Regex & Rule Matrix"]
+        GroqCheck -->|No or Error or Limit| FallbackFunc["generate_grounded_fallback_advisory()<br/>Heuristic Regex and Rule Matrix"]
         FallbackFunc --> FallbackResp["Deterministic Structured Advisory"]
     end
     
@@ -350,12 +350,12 @@ export default function About({ defaultTab = 'architecture' }) {
     end
     
     subgraph Vercel_Tier ["Vercel Edge Platform"]
-        Browser <-->|HTTPS Web Traffic / CDN| Vercel["Vercel Global Edge Network<br/>React 18 + Vite SPA"]
+        Browser -->|HTTPS Web Traffic / CDN| Vercel["Vercel Global Edge Network<br/>React 18 + Vite SPA"]
     end
     
     subgraph HF_Tier ["Hugging Face Cloud Infrastructure"]
         Vercel -->|HTTPS REST API /predict, /justify, /advisory| HF_Space["Hugging Face Space (Gradio SDK)<br/>marrideepak/sentinelai-backend<br/>CPU Basic: 2 vCPU, 16 GB RAM"]
-        HF_Hub["Hugging Face Model Hub (Git LFS)<br/>marrideepak/sentinelai-model<br/>1.1 GB text_model.pth Weights"] -.->|Boot Cache Download via hf_hub_download| HF_Space
+        HF_Hub["Hugging Face Model Hub (Git LFS)<br/>marrideepak/sentinelai-model<br/>1.1 GB text_model.pth Weights"] -->|Boot Cache Download via hf_hub_download| HF_Space
     end
     
     subgraph Groq_Tier ["Groq Cloud API"]
@@ -363,8 +363,55 @@ export default function About({ defaultTab = 'architecture' }) {
     end
     
     subgraph Supabase_Tier ["Supabase Managed Cloud Platform"]
-        Browser <-->|HTTPS GoTrue JWT Auth| SupaAuth["Supabase Authentication Service"]
-        Browser <-->|HTTPS PostgREST API with RLS| SupaPG["Supabase PostgreSQL Database<br/>public.profiles & public.analyses"]
+        Browser -->|HTTPS GoTrue JWT Auth| SupaAuth["Supabase Authentication Service"]
+        Browser -->|HTTPS PostgREST API with RLS| SupaPG["Supabase PostgreSQL Database<br/>public.profiles and public.analyses"]
+    end`;
+
+  const chartDependencies = `flowchart TD
+    subgraph Browser_Deps ["Browser / Frontend Dependencies (package.json)"]
+        F1["react (18.3.1)"]
+        F2["react-dom (18.3.1)"]
+        F3["react-router-dom (6.28.0)"]
+        F4["@supabase/supabase-js (2.46.1)"]
+        F5["lucide-react (0.462.0)"]
+        F6["tailwindcss (3.4.15) and vite (6.0.1)"]
+    end
+    
+    subgraph Backend_Deps ["Backend Microservice Dependencies (requirements.txt and packages.txt)"]
+        subgraph Sys_Pkg ["Linux System Packages (packages.txt)"]
+            S1["tesseract-ocr (v5.5)"]
+            S2["tesseract-ocr-hin (Hindi Language Pack)"]
+            S3["tesseract-ocr-tel (Telugu Language Pack)"]
+            S4["libgl1 and libglib2.0-0"]
+        end
+        
+        subgraph Web_Py ["Web Framework and Runtime"]
+            W1["fastapi (v0.111.0+)"]
+            W2["uvicorn (v0.27.0+)"]
+            W3["pydantic (v2.5.3+)"]
+            W4["gradio (4.44.0)"]
+            W5["httpx (v0.26.0+) and loguru"]
+        end
+        
+        subgraph ML_Py ["Machine Learning and Computer Vision"]
+            M1["torch (PyTorch Engine)"]
+            M2["transformers (v4.36.2+)"]
+            M3["sentencepiece (v0.1.99+)"]
+            M4["huggingface-hub (v0.23.0+)"]
+            M5["scikit-learn (v1.4.0+)"]
+            M6["numpy and pandas"]
+            M7["pytesseract (v0.3.10+)"]
+            M8["opencv-python-headless (v4.8.0+)"]
+            M9["Pillow (v10.0.0+)"]
+            M10["tldextract (v5.1.0+)"]
+        end
+        
+        subgraph Model_Checkpoints ["Trained Checkpoint Artifacts (saved_models/)"]
+            C1["text_model.pth (1.11 GB XLM-RoBERTa Weights)"]
+            C2["text_tokenizer/ (SentencePiece BPE vocab and config)"]
+            C3["metadata_model.pth (18 KB FFNN Weights)"]
+            C4["metadata_scaler.pkl (809 B StandardScaler)"]
+        end
     end`;
 
   const chartDependencies = `flowchart TD
