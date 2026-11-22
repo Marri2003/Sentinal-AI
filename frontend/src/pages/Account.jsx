@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   User, 
   Mail, 
@@ -10,18 +10,34 @@ import {
   Loader2, 
   Lock,
   Database,
-  ExternalLink
+  ExternalLink,
+  Layers,
+  Settings,
+  History,
+  Calendar
 } from 'lucide-react';
 import { useAuth } from '../App';
-import { signOut, supabase } from '../services/supabase';
-import { useNavigate } from 'react-router-dom';
+import { signOut, supabase, isSupabaseConfigured } from '../services/supabase';
+import { useNavigate, Link } from 'react-router-dom';
 
 export default function Account() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [resetting, setResetting] = useState(false);
+  const [scanCount, setScanCount] = useState(null);
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (user?.id && supabase && isSupabaseConfigured) {
+      supabase
+        .from('analyses')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .then(({ count }) => setScanCount(count ?? 0))
+        .catch(() => setScanCount(0));
+    }
+  }, [user]);
 
   const handlePasswordReset = async () => {
     if (!user?.email || !supabase) return;
@@ -74,9 +90,14 @@ export default function Account() {
               {user.email?.[0]?.toUpperCase() || 'U'}
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">
-                {user.user_metadata?.full_name || user.email?.split('@')[0]}
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-bold text-white">
+                  {user.user_metadata?.full_name || user.email?.split('@')[0]}
+                </h2>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-mono font-bold uppercase">
+                  Verified
+                </span>
+              </div>
               <div className="text-xs text-slate-400 flex items-center gap-2 mt-1">
                 <Mail className="h-3.5 w-3.5 text-cyan-400" />
                 <span className="font-mono">{user.email}</span>
@@ -93,17 +114,25 @@ export default function Account() {
           </button>
         </div>
 
-        {/* Security Credentials */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        {/* Security Credentials & Audit Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
           <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
             <span className="text-slate-500 font-mono text-[11px] uppercase tracking-wider">Unique Cryptographic User ID</span>
-            <div className="font-mono text-cyan-300 break-all">{user.id}</div>
+            <div className="font-mono text-cyan-300 break-all text-xs">{user.id}</div>
           </div>
 
           <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
             <span className="text-slate-500 font-mono text-[11px] uppercase tracking-wider">Account Creation Date</span>
-            <div className="font-mono text-slate-300">
-              {user.created_at ? new Date(user.created_at).toLocaleString() : 'Active'}
+            <div className="font-mono text-slate-300 flex items-center gap-1.5 mt-1">
+              <Calendar className="h-3.5 w-3.5 text-slate-400" />
+              <span>{user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Active'}</span>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
+            <span className="text-slate-500 font-mono text-[11px] uppercase tracking-wider">Scans Performed by Account</span>
+            <div className="font-mono text-2xl font-black text-white mt-0.5">
+              {scanCount === null ? '...' : scanCount}
             </div>
           </div>
         </div>
@@ -142,6 +171,24 @@ export default function Account() {
             {resetting ? <Loader2 className="h-4 w-4 animate-spin text-cyan-400" /> : <Lock className="h-4 w-4" />}
             <span>{resetting ? 'Sending...' : 'Send Password Reset'}</span>
           </button>
+        </div>
+
+        {/* Quick Links */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+          <Link
+            to="/history"
+            className="p-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white flex items-center justify-center gap-2 transition"
+          >
+            <History className="h-4 w-4 text-cyan-400" />
+            <span>View Full Scan Audit History</span>
+          </Link>
+          <Link
+            to="/settings"
+            className="p-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white flex items-center justify-center gap-2 transition"
+          >
+            <Settings className="h-4 w-4 text-cyan-400" />
+            <span>Tune Sensitivity & Endpoints</span>
+          </Link>
         </div>
       </div>
     </div>
