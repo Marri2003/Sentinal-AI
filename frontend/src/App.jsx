@@ -78,14 +78,7 @@ export default function App() {
                   </Suspense>
                 } 
               />
-              <Route 
-                path="/architecture" 
-                element={
-                  <Suspense fallback={<PageFallback />}>
-                    <About defaultTab="architecture" />
-                  </Suspense>
-                } 
-              />
+              <Route path="/architecture" element={<Navigate to="/about" replace />} />
               <Route path="/demo" element={<Demo />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
