@@ -111,3 +111,42 @@ export async function fetchBackendStats() {
     return null;
   }
 }
+
+/**
+ * Generate AI-Powered Safety Advisory examining fraud, recruitment, personal data, and financial risks
+ */
+export async function getSafetyAdvisory({
+  message = '',
+  classification = 'SAFE',
+  riskScore = 0.0,
+  sender = '',
+  detectedUrl = '',
+  ocrText = null
+}) {
+  const payload = {
+    original_message: message,
+    classification,
+    risk_score: riskScore,
+    sender,
+    detected_url: detectedUrl,
+    ocr_text: ocrText
+  };
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/advisory`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Safety Advisory endpoint error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (err) {
+    console.warn('Safety advisory fetch error:', err);
+    return null;
+  }
+}

@@ -16,7 +16,8 @@ import {
   X,
   FileSpreadsheet,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Compass
 } from 'lucide-react';
 import { useAuth } from '../App';
 import { supabase, isSupabaseConfigured, getUserScans, deleteUserScan, clearAllUserScans } from '../services/supabase';
@@ -445,6 +446,38 @@ export default function History() {
                 <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
                   <span className="text-slate-500 uppercase tracking-wider font-mono text-[10px]">Detected URL</span>
                   <div className="font-mono text-cyan-400 break-all mt-0.5">{selectedRecord.detected_url}</div>
+                </div>
+              )}
+
+              {/* AI Safety Advisory (if stored in incident explainability) */}
+              {selectedRecord.explainability?.advisory && (
+                <div className="p-3.5 rounded-xl bg-[#090e1c] border border-cyan-500/30 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-cyan-400 font-bold flex items-center gap-1.5 text-xs">
+                      <Compass className="h-4 w-4" /> AI Safety Advisory
+                    </span>
+                    <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                      selectedRecord.explainability.advisory.advisory_level === 'HIGH'
+                        ? 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                        : selectedRecord.explainability.advisory.advisory_level === 'MODERATE'
+                        ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                        : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                    }`}>
+                      {selectedRecord.explainability.advisory.advisory_level} ADVISORY
+                    </span>
+                  </div>
+                  <p className="text-slate-300 text-xs leading-relaxed">
+                    {selectedRecord.explainability.advisory.contextual_explanation}
+                  </p>
+                  {selectedRecord.explainability.advisory.warning_signs?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {selectedRecord.explainability.advisory.warning_signs.map((ws, i) => (
+                        <span key={i} className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-900 border border-slate-700 text-slate-300">
+                          {ws.category}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

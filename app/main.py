@@ -48,10 +48,17 @@ from app.models import (
     JustifyResponse,
     ChatRequest,
     ChatResponse,
-    DashboardStatsResponse
+    DashboardStatsResponse,
+    SafetyAdvisoryRequest,
+    SafetyAdvisoryResponse
 )
 
-from app.explainability_engine import generate_explanation, StructuredExplanationResponse
+from app.explainability_engine import (
+    generate_explanation, 
+    StructuredExplanationResponse,
+    generate_safety_advisory,
+    generate_grounded_fallback_advisory
+)
 
 from models.text_pipeline import TextPipeline
 from models.image_pipeline import ImagePipeline
@@ -702,6 +709,47 @@ async def justify(request: JustifyRequest):
         return JustifyResponse(
             justification=fallback_struct.explanation.summary,
             structured_explanation=fallback_struct
+        )
+
+
+@app.post(
+    "/advisory",
+    response_model=SafetyAdvisoryResponse,
+    responses={
+        200: {"model": SafetyAdvisoryResponse},
+        400: {"model": ErrorResponse},
+        500: {"model": ErrorResponse}
+    },
+    tags=["Advisory"]
+)
+async def get_safety_advisory_endpoint(request: SafetyAdvisoryRequest):
+    """
+    AI-Powered Safety Advisory Endpoint.
+    Analyzes recruitment, financial, personal data, and social engineering risk vectors
+    to generate proactive educational warnings and safe verification guidelines
+    for BOTH phishing and legitimate communications.
+    """
+    classification = request.classification or request.model_classification or "SAFE"
+    try:
+        advisory_res = await generate_safety_advisory(
+            model_classification=classification,
+            original_message=request.original_message,
+            risk_score=request.risk_score or 0.0,
+            sender=request.sender or "",
+            detected_url=request.detected_url or "",
+            ocr_text=request.ocr_text
+        )
+        return advisory_res
+    except Exception as e:
+        logger.error(f"❌ Safety advisory endpoint error: {e}")
+        logger.error(traceback.format_exc())
+        return generate_grounded_fallback_advisory(
+            model_classification=classification,
+            original_message=request.original_message,
+            risk_score=request.risk_score or 0.0,
+            sender=request.sender or "",
+            detected_url=request.detected_url or "",
+            ocr_text=request.ocr_text
         )
 
 

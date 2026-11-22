@@ -16,7 +16,7 @@ import {
   FileText,
   RotateCcw
 } from 'lucide-react';
-import { predictPhishing, checkBackendHealth, getJustification } from '../services/sentinelApi';
+import { predictPhishing, checkBackendHealth, getJustification, getSafetyAdvisory } from '../services/sentinelApi';
 import { logScanToCommunity, getCommunitySpamCount } from '../services/supabase';
 import ResultCard from '../components/ResultCard';
 import { useAuth } from '../App';
@@ -62,6 +62,7 @@ export default function Analyze() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [justification, setJustification] = useState(null);
+  const [safetyAdvisory, setSafetyAdvisory] = useState(null);
   const [communityCount, setCommunityCount] = useState(0);
   const [dragActive, setDragActive] = useState(false);
 
@@ -112,6 +113,7 @@ export default function Analyze() {
     setError(null);
     setResult(null);
     setJustification(null);
+    setSafetyAdvisory(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -122,6 +124,7 @@ export default function Analyze() {
     setImagePreview(null);
     setError(null);
     setResult(null);
+    setSafetyAdvisory(null);
   };
 
   const handleScan = async (e) => {
@@ -135,6 +138,7 @@ export default function Analyze() {
     setError(null);
     setResult(null);
     setJustification(null);
+    setSafetyAdvisory(null);
 
     const steps = [
       'Extracting sender header and URL signatures...',
@@ -175,8 +179,26 @@ export default function Analyze() {
       setResult(res);
 
       const effectiveText = message.trim() || res.explainability?.ocr_text || '';
-      
-      // Persist scan to database and dual-tier cache
+
+      // 1. Fetch AI Safety Advisory examining fraud, sensitive data & recruitment traps
+      const advisoryPromise = getSafetyAdvisory({
+        message: effectiveText,
+        classification: res.decision,
+        riskScore: res.final_score,
+        sender: payload.metadata.sender,
+        detectedUrl: payload.metadata.url,
+        ocrText: res.explainability?.ocr_text || null
+      }).catch(() => null);
+
+      const advisoryData = await advisoryPromise;
+      setSafetyAdvisory(advisoryData);
+
+      // 2. Persist scan to database and dual-tier cache with advisory telemetry
+      const enrichedExplainability = {
+        ...(res.explainability || {}),
+        advisory: advisoryData?.advisory || null
+      };
+
       const savedRecord = await logScanToCommunity({
         userId: user?.id || null,
         messageText: effectiveText,
@@ -187,7 +209,7 @@ export default function Analyze() {
         decision: res.decision,
         confidence: res.confidence,
         pipelineScores: res.pipeline_scores,
-        explainability: res.explainability,
+        explainability: enrichedExplainability,
       });
 
       // Broadcast instant reactive update event for dashboard synchronization
@@ -420,7 +442,12 @@ export default function Analyze() {
 
       {/* Results Section */}
       <div ref={resultsRef} className="pt-2">
-        <ResultCard result={result} justification={justification} communityCount={communityCount} />
+        <ResultCard 
+          result={result} 
+          justification={justification} 
+          advisory={safetyAdvisory}
+          communityCount={communityCount} 
+        />
       </div>
     </div>
   );

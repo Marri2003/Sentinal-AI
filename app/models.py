@@ -5,7 +5,7 @@ import re
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from app.explainability_engine import StructuredExplanationResponse
+from app.explainability_engine import StructuredExplanationResponse, SafetyAdvisoryResponse
 
 
 class MetadataInput(BaseModel):
@@ -250,4 +250,28 @@ class DashboardStatsResponse(BaseModel):
                 "last_updated": "2026-11-22T17:30:00Z"
             }
         }
+
+
+class SafetyAdvisoryRequest(BaseModel):
+    """Request model for /advisory endpoint."""
+    original_message: str = Field(..., description="Original SMS or notification content")
+    classification: Optional[str] = Field("SAFE", description="Model classification: PHISHING, SAFE, or SUSPICIOUS")
+    model_classification: Optional[str] = Field(None, description="Alias for classification")
+    risk_score: Optional[float] = Field(0.0, description="Risk score from detection pipeline")
+    sender: Optional[str] = Field("", description="Sender phone number or alphanumeric header")
+    detected_url: Optional[str] = Field("", description="Extracted URL if any")
+    ocr_text: Optional[str] = Field(None, description="OCR text if extracted from screenshot")
+
+    class Config:
+        protected_namespaces = ()
+        json_schema_extra = {
+            "example": {
+                "original_message": "Congratulations! You are eligible for a job opportunity. You can join anytime without any obstruction. Contact our HR at 9876543210.",
+                "classification": "SAFE",
+                "risk_score": 0.15,
+                "sender": "+919876543210",
+                "detected_url": ""
+            }
+        }
+
 

@@ -29,8 +29,9 @@ import {
   Loader2
 } from 'lucide-react';
 import { getJustification } from '../services/sentinelApi';
+import SafetyAdvisoryCard from './SafetyAdvisoryCard';
 
-export default function ResultCard({ result, justification, communityCount = 0 }) {
+export default function ResultCard({ result, justification, advisory = null, communityCount = 0 }) {
   const [copied, setCopied] = useState(false);
   const [currentJustification, setCurrentJustification] = useState(justification);
   const [activeLang, setActiveLang] = useState('english');
@@ -113,6 +114,7 @@ export default function ResultCard({ result, justification, communityCount = 0 }
         fusion_weights: result.fusion_weights_used
       },
       llm_explanation: structured || { summary: summaryText },
+      safety_advisory: advisory?.advisory || advisory || null,
       evidence: {
         words,
         features,
@@ -573,6 +575,11 @@ export default function ResultCard({ result, justification, communityCount = 0 }
             </a>
           </div>
         </div>
+      )}
+
+      {/* 6. AI-Powered Safety Advisory Card (Works for BOTH Legitimate and Phishing Predictions) */}
+      {advisory && (
+        <SafetyAdvisoryCard advisoryData={advisory} classification={result.decision} />
       )}
     </div>
   );
