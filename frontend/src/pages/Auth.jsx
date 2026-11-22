@@ -18,39 +18,32 @@ import {
   signIn, 
   signUp, 
   signOut, 
-  getCurrentUser, 
   getUserScanHistory, 
   isSupabaseConfigured 
 } from '../services/supabase';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../App';
 
 export default function Auth() {
+  const { user, loading: authLoading } = useAuth(); // Use global auth — no duplicate getCurrentUser calls
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState(null);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
 
+  // Load history when user becomes available (from global auth context)
   useEffect(() => {
-    loadUser();
-  }, []);
-
-  const loadUser = async () => {
-    try {
-      const currentUser = await getCurrentUser();
-      setUser(currentUser);
-      if (currentUser) {
-        loadHistory();
-      }
-    } catch (err) {
-      console.warn('Auth check failed:', err);
+    if (user) {
+      loadHistory();
+    } else {
+      setHistory([]);
     }
-  };
+  }, [user]); // Re-runs whenever the global auth state changes
 
   const loadHistory = async () => {
     setHistoryLoading(true);
@@ -75,16 +68,13 @@ export default function Auth() {
         const { data, error: authError } = await signIn(email, password);
         if (authError) throw authError;
         setMessage('Signed in successfully!');
-        setUser(data.user);
-        loadHistory();
+        // Global auth context (App.jsx) will update `user` automatically via onAuthStateChange
+        // No need to manually setUser() — the useEffect above watching `user` triggers loadHistory()
       } else {
         const { data, error: authError } = await signUp(email, password, fullName);
         if (authError) throw authError;
         setMessage('Registration successful! Please check your email if confirmation is enabled, or sign in.');
-        if (data?.user) {
-          setUser(data.user);
-          loadHistory();
-        }
+        // If email confirmation is disabled in Supabase, the user is immediately set by onAuthStateChange
       }
     } catch (err) {
       setError(err.message || 'Authentication operation failed.');
@@ -95,10 +85,18 @@ export default function Auth() {
 
   const handleLogout = async () => {
     await signOut();
-    setUser(null);
+    // Global auth context will clear `user` via onAuthStateChange
     setHistory([]);
     setMessage('Logged out successfully.');
   };
+
+  if (authLoading) {
+    return (
+      <div className="container mx-auto px-4 py-20 flex justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   // 1. If User is Logged In -> Show Dashboard & Scan History
   if (user) {

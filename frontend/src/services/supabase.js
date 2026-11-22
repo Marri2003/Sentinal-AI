@@ -80,9 +80,12 @@ export function onAuthStateChange(callback) {
 }
 
 /**
- * Log a scan result to the database for history & community telemetry
+ * Log a scan result to the database for history & community telemetry.
+ * Accepts an explicit userId to avoid async race conditions when the caller
+ * already has the authenticated user from the global AuthContext.
  */
 export async function logScanToCommunity({
+  userId = null,          // Explicitly passed by caller (preferred over async getCurrentUser)
   messageText,
   sender,
   phone,
@@ -95,11 +98,17 @@ export async function logScanToCommunity({
 }) {
   if (!supabase) return null;
   try {
-    const user = await getCurrentUser();
+    // Fallback: resolve user from session if caller didn't pass userId
+    let resolvedUserId = userId;
+    if (!resolvedUserId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      resolvedUserId = session?.user?.id || null;
+    }
+
     const riskLevel = riskScore >= 0.7 ? 'HIGH' : riskScore >= 0.4 ? 'MEDIUM' : 'LOW';
 
     const { data, error } = await supabase.from('analyses').insert({
-      user_id: user?.id || null,
+      user_id: resolvedUserId,
       message_text: messageText || '',
       sender: sender || '',
       phone: phone || '',
@@ -163,17 +172,21 @@ export async function getCommunitySpamCount(sender = '', messageText = '') {
 }
 
 /**
- * Fetch past scan history for the current logged-in user
+ * Fetch past scan history for the current logged-in user.
+ * Uses getSession() (reads from localStorage, no network round-trip) to reliably
+ * get the user ID even immediately after page load / browser refresh.
  */
 export async function getUserScanHistory(limit = 20) {
   if (!supabase) return [];
-  const user = await getCurrentUser();
-  if (!user) return [];
+
+  // getSession() reads the persisted JWT from localStorage — no async latency
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user?.id) return [];
 
   const { data, error } = await supabase
     .from('analyses')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', session.user.id)
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -182,4 +195,5 @@ export async function getUserScanHistory(limit = 20) {
     return [];
   }
   return data || [];
+}
 }

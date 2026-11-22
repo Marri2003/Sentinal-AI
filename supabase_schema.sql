@@ -54,18 +54,14 @@ create index if not exists idx_analyses_created_at on public.analyses(created_at
 alter table public.analyses enable row level security;
 
 -- Analyses Policies
--- A. Logged-in users can view their own scan history
+-- A. Logged-in users can ONLY view their own scan history (strict ownership check)
 create policy "Users can view their own analyses"
     on public.analyses for select
-    using (auth.uid() = user_id or auth.uid() is null);
+    using (auth.uid() = user_id);
 
--- B. Anyone (or authenticated user) can insert a scan log
-create policy "Users can insert analyses"
-    on public.analyses for insert
-    with check (true);
-
--- C. Community Telemetry Policy: Allow reading aggregate SPAM counts across all users
-create policy "Anyone can check spam telemetry counts"
+-- B. Community Telemetry Policy: Allow anyone (including anonymous) to read aggregate SPAM counts
+--    This is separate from the user history policy, so user's HAM records are never exposed.
+create policy "Anyone can read spam telemetry"
     on public.analyses for select
     using (decision = 'SPAM');
 

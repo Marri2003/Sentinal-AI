@@ -15,6 +15,7 @@ import {
 import { predictPhishing, checkBackendHealth, getJustification } from '../services/sentinelApi';
 import { logScanToCommunity, getCommunitySpamCount } from '../services/supabase';
 import ResultCard from '../components/ResultCard';
+import { useAuth } from '../App';
 
 const PRELOAD_SAMPLES = [
   {
@@ -35,6 +36,7 @@ const PRELOAD_SAMPLES = [
 ];
 
 export default function Analyze() {
+  const { user } = useAuth(); // Global auth — always has the authenticated user ID, no race condition
   const [language, setLanguage] = useState('english');
   const [phone, setPhone] = useState('');
   const [message, setMessage] = useState('');
@@ -133,9 +135,10 @@ export default function Analyze() {
       clearInterval(stepInterval);
       setResult(res);
 
-      // Log to Supabase and query crowdsourced community spam telemetry
+      // Log to Supabase — pass the authenticated user ID directly (no async getCurrentUser() race condition)
       const effectiveText = message.trim() || res.explainability?.ocr_text || '';
       logScanToCommunity({
+        userId: user?.id || null,
         messageText: effectiveText,
         sender: payload.metadata.sender,
         phone: payload.metadata.sender,
