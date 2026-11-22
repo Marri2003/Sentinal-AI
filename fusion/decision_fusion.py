@@ -134,11 +134,17 @@ class DecisionFusion:
         return any(pattern in url_lower for pattern in SUSPICIOUS_DOMAIN_PATTERNS)
 
     def _is_trusted_sender(self, sender: Optional[str]) -> bool:
-        """Check if sender ID is in trusted list."""
+        """Check if sender ID is in trusted list or matches telecom DLT format (e.g. AD-HDFCBK, HDFCBK)."""
         if not sender:
             return False
         sender_upper = sender.upper().strip()
-        return sender_upper in TRUSTED_SENDERS
+        if sender_upper in TRUSTED_SENDERS:
+            return True
+        # Check telecom DLT prefixes (e.g., VM-HDFCBK, AD-SBIBNK, BZ-ICICIB)
+        for ts in TRUSTED_SENDERS:
+            if ts in sender_upper:
+                return True
+        return False
 
     def _calculate_confidence(self, score: float) -> ConfidenceLevel:
         """
@@ -283,16 +289,22 @@ class DecisionFusion:
         is_trusted_spoof = self._looks_like_trusted_spoof(url)
 
         if is_trusted_spoof:
-            fused_score = self._clamp_score(fused_score + 0.22)
+            fused_score = self._clamp_score(fused_score + 0.25)
         elif is_trusted_domain and is_trusted_sender:
             # Both domain and sender are trusted - maximum trust bonus
+            fused_score = self._clamp_score(fused_score - 0.50)
+        elif is_trusted_sender and not url:
+            # Verified official sender with NO external URL (pure transactional SMS like debits/OTPs)
+            # Legitimate financial notifications frequently use urgency terms ("SMS BLOCK to...")
+            fused_score = self._clamp_score(fused_score - 0.65)
+        elif is_trusted_domain:
             fused_score = self._clamp_score(fused_score - 0.25)
-        elif is_trusted_domain or is_trusted_sender:
-            # Either domain or sender is trusted - very strong trust bonus
-            fused_score = self._clamp_score(fused_score - 0.15)
+        elif is_trusted_sender:
+            # Trusted sender with unverified link - moderate trust discount
+            fused_score = self._clamp_score(fused_score - 0.20)
         elif is_suspicious_domain:
             # Known suspicious TLD - increase spam score
-            fused_score = self._clamp_score(fused_score + 0.08)
+            fused_score = self._clamp_score(fused_score + 0.15)
 
         fused_score = self._clamp_score(fused_score)
 
