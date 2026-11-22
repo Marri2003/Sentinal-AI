@@ -175,7 +175,9 @@ export default function Analyze() {
       setResult(res);
 
       const effectiveText = message.trim() || res.explainability?.ocr_text || '';
-      logScanToCommunity({
+      
+      // Persist scan to database and dual-tier cache
+      const savedRecord = await logScanToCommunity({
         userId: user?.id || null,
         messageText: effectiveText,
         sender: payload.metadata.sender,
@@ -186,7 +188,14 @@ export default function Analyze() {
         confidence: res.confidence,
         pipelineScores: res.pipeline_scores,
         explainability: res.explainability,
-      }).catch(() => {});
+      });
+
+      // Broadcast instant reactive update event for dashboard synchronization
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('sentinel_scan_completed', { 
+          detail: savedRecord?.data || null 
+        }));
+      }
 
       getCommunitySpamCount(payload.metadata.sender, effectiveText)
         .then((telemetry) => setCommunityCount(telemetry.count))

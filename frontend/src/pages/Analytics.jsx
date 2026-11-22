@@ -16,7 +16,7 @@ import {
   FileText,
   Calendar
 } from 'lucide-react';
-import { supabase, isSupabaseConfigured } from '../services/supabase';
+import { supabase, isSupabaseConfigured, getUserScans } from '../services/supabase';
 
 export default function Analytics() {
   const [loading, setLoading] = useState(true);
@@ -59,23 +59,20 @@ export default function Analytics() {
 
   useEffect(() => {
     fetchAnalytics();
+
+    const handleScanCompleted = () => {
+      fetchAnalytics();
+    };
+    window.addEventListener('sentinel_scan_completed', handleScanCompleted);
+    return () => {
+      window.removeEventListener('sentinel_scan_completed', handleScanCompleted);
+    };
   }, []);
 
   const fetchAnalytics = async () => {
     setLoading(true);
     try {
-      if (!isSupabaseConfigured || !supabase) {
-        setLoading(false);
-        return;
-      }
-
-      const { data: records, error } = await supabase
-        .from('analyses')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) console.warn('Error fetching analytics:', error.message);
-
+      const records = await getUserScans(null, 500);
       const items = records || [];
       const total = items.length;
       let spam = 0;

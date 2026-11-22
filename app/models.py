@@ -222,3 +222,32 @@ class ChatResponse(BaseModel):
                 "response": "SMS scams often contain urgent language, suspicious links, and requests for personal information. Always verify sender authenticity through official channels."
             }
         }
+
+
+class DashboardStatsResponse(BaseModel):
+    """Response model for /dashboard/stats endpoint."""
+    total_scans: int = Field(..., description="Total messages analyzed")
+    phishing_count: int = Field(..., description="Total phishing threats detected")
+    legitimate_count: int = Field(..., description="Total legitimate notifications verified")
+    suspicious_count: int = Field(..., description="Total suspicious or ambiguous messages")
+    phishing_percentage: float = Field(..., description="Percentage of scans classified as phishing")
+    legitimate_percentage: float = Field(..., description="Percentage of scans classified as legitimate")
+    suspicious_percentage: float = Field(..., description="Percentage of scans classified as suspicious")
+    avg_threat_score: float = Field(..., description="Average multi-modal risk score (0.0 to 1.0)")
+    last_updated: str = Field(..., description="ISO 8601 timestamp of calculation")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "total_scans": 25,
+                "phishing_count": 12,
+                "legitimate_count": 10,
+                "suspicious_count": 3,
+                "phishing_percentage": 48.0,
+                "legitimate_percentage": 40.0,
+                "suspicious_percentage": 12.0,
+                "avg_threat_score": 0.54,
+                "last_updated": "2026-11-22T17:30:00Z"
+            }
+        }
+

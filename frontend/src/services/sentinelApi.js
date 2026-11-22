@@ -94,3 +94,20 @@ export async function getJustification(result, language = 'english', originalMes
     throw err;
   }
 }
+
+/**
+ * Retrieve global aggregated telemetry stats from FastAPI backend
+ */
+export async function fetchBackendStats() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/dashboard/stats`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (err) {
+    console.warn('Backend stats unavailable:', err);
+    return null;
+  }
+}

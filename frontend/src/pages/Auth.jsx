@@ -52,7 +52,7 @@ export default function Auth() {
         setMessage('Authenticated successfully. Redirecting...');
         setTimeout(() => navigate('/dashboard'), 600);
       } else {
-        const { data, error: signupErr } = await signUp(email, password, { full_name: fullName });
+        const { data, error: signupErr } = await signUp(email, password, fullName);
         if (signupErr) throw signupErr;
         
         if (data?.session) {
@@ -63,7 +63,12 @@ export default function Auth() {
         }
       }
     } catch (err) {
-      setError(err.message || 'Authentication operation failed.');
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('too many') || err.status === 429) {
+        setError('Authentication rate limit reached. Please wait 60 seconds before retrying.');
+      } else {
+        setError(msg || 'Authentication operation failed.');
+      }
     } finally {
       setLoading(false);
     }

@@ -17,7 +17,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { useAuth } from '../App';
-import { signOut, supabase, isSupabaseConfigured } from '../services/supabase';
+import { signOut, supabase, isSupabaseConfigured, getUserScans } from '../services/supabase';
 import { useNavigate, Link } from 'react-router-dom';
 
 export default function Account() {
@@ -29,14 +29,9 @@ export default function Account() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (user?.id && supabase && isSupabaseConfigured) {
-      supabase
-        .from('analyses')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .then(({ count }) => setScanCount(count ?? 0))
-        .catch(() => setScanCount(0));
-    }
+    getUserScans(user?.id || null).then(records => {
+      setScanCount(records.length);
+    }).catch(() => setScanCount(0));
   }, [user]);
 
   const handlePasswordReset = async () => {

@@ -47,7 +47,8 @@ from app.models import (
     JustifyRequest,
     JustifyResponse,
     ChatRequest,
-    ChatResponse
+    ChatResponse,
+    DashboardStatsResponse
 )
 
 from app.explainability_engine import generate_explanation, StructuredExplanationResponse
@@ -85,6 +86,16 @@ text_pipeline: Optional[TextPipeline] = None
 image_pipeline: Optional[ImagePipeline] = None
 metadata_pipeline: Optional[MetadataPipeline] = None
 fusion_module: Optional[DecisionFusion] = None
+
+# In-memory aggregate telemetry tracker
+telemetry_stats = {
+    "total_scans": 0,
+    "phishing_count": 0,
+    "legitimate_count": 0,
+    "suspicious_count": 0,
+    "score_sum": 0.0,
+    "last_updated": datetime.utcnow().isoformat() + "Z"
+}
 
 
 @app.on_event("startup")
@@ -161,6 +172,33 @@ async def health_check():
             "fusion_module": fusion_module is not None
         },
         timestamp=datetime.now().isoformat()
+    )
+
+
+@app.get("/dashboard/stats", response_model=DashboardStatsResponse, tags=["Dashboard"])
+async def get_dashboard_stats():
+    """Returns aggregated threat detection telemetry statistics."""
+    total = telemetry_stats["total_scans"]
+    phishing = telemetry_stats["phishing_count"]
+    legitimate = telemetry_stats["legitimate_count"]
+    suspicious = telemetry_stats["suspicious_count"]
+    score_sum = telemetry_stats["score_sum"]
+
+    phishing_pct = round((phishing / total * 100.0), 2) if total > 0 else 0.0
+    legit_pct = round((legitimate / total * 100.0), 2) if total > 0 else 0.0
+    suspicious_pct = round((suspicious / total * 100.0), 2) if total > 0 else 0.0
+    avg_score = round((score_sum / total), 4) if total > 0 else 0.0
+
+    return DashboardStatsResponse(
+        total_scans=total,
+        phishing_count=phishing,
+        legitimate_count=legitimate,
+        suspicious_count=suspicious,
+        phishing_percentage=phishing_pct,
+        legitimate_percentage=legit_pct,
+        suspicious_percentage=suspicious_pct,
+        avg_threat_score=avg_score,
+        last_updated=telemetry_stats["last_updated"]
     )
 
 
@@ -328,6 +366,17 @@ async def predict(request: PredictionRequest):
                 image=weights_used["image"]
             )
         )
+
+        # Update telemetry statistics
+        telemetry_stats["total_scans"] += 1
+        telemetry_stats["score_sum"] += fusion_result.score
+        if fusion_result.label == "SPAM":
+            telemetry_stats["phishing_count"] += 1
+        elif 0.35 <= fusion_result.score < 0.6:
+            telemetry_stats["suspicious_count"] += 1
+        else:
+            telemetry_stats["legitimate_count"] += 1
+        telemetry_stats["last_updated"] = datetime.utcnow().isoformat() + "Z"
 
         return response
 

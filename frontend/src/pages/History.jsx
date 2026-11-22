@@ -19,7 +19,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../App';
-import { supabase, isSupabaseConfigured } from '../services/supabase';
+import { supabase, isSupabaseConfigured, getUserScans, deleteUserScan, clearAllUserScans } from '../services/supabase';
 
 export default function History() {
   const { user } = useAuth();
@@ -40,32 +40,21 @@ export default function History() {
 
   useEffect(() => {
     fetchHistory();
-  }, [user]);
+
+    const handleScanCompleted = () => {
+      fetchHistory();
+    };
+    window.addEventListener('sentinel_scan_completed', handleScanCompleted);
+    return () => {
+      window.removeEventListener('sentinel_scan_completed', handleScanCompleted);
+    };
+  }, [user?.id]);
 
   const fetchHistory = async () => {
     setLoading(true);
     setFeedbackMessage(null);
     try {
-      if (!isSupabaseConfigured || !supabase) {
-        setLoading(false);
-        return;
-      }
-
-      let query = supabase
-        .from('analyses')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (user?.id) {
-        query = query.eq('user_id', user.id);
-      } else {
-        query = query.limit(50);
-      }
-
-      const { data, error } = await query;
-      if (error) {
-        console.warn('Error fetching history:', error.message);
-      }
+      const data = await getUserScans(user?.id || null, 100);
       setRecords(data || []);
     } catch (err) {
       console.warn('Failed to load history:', err);
@@ -76,18 +65,12 @@ export default function History() {
 
   // Delete an individual record
   const handleDeleteRecord = async () => {
-    if (!deleteModalRecord || !supabase) return;
+    if (!deleteModalRecord) return;
     setDeleting(true);
     try {
-      const { error } = await supabase
-        .from('analyses')
-        .delete()
-        .eq('id', deleteModalRecord.id);
-
-      if (error) throw error;
-
+      await deleteUserScan(deleteModalRecord.id, user?.id || null);
       setRecords(prev => prev.filter(r => r.id !== deleteModalRecord.id));
-      setFeedbackMessage({ type: 'success', text: 'Scan record deleted successfully from database.' });
+      setFeedbackMessage({ type: 'success', text: 'Scan record deleted successfully.' });
       setDeleteModalRecord(null);
     } catch (err) {
       setFeedbackMessage({ type: 'error', text: `Failed to delete record: ${err.message}` });
@@ -98,16 +81,10 @@ export default function History() {
 
   // Clear all scan records for the logged-in user
   const handleClearAllHistory = async () => {
-    if (!supabase || !user?.id) return;
+    if (!user?.id && records.length === 0) return;
     setDeleting(true);
     try {
-      const { error } = await supabase
-        .from('analyses')
-        .delete()
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
+      await clearAllUserScans(user?.id || null);
       setRecords([]);
       setFeedbackMessage({ type: 'success', text: 'All scan records have been cleared from your account.' });
       setShowClearAllModal(false);

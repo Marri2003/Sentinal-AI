@@ -17,7 +17,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../App';
-import { supabase, isSupabaseConfigured } from '../services/supabase';
+import { supabase, isSupabaseConfigured, getUserScans, getCommunitySpamCount } from '../services/supabase';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -34,34 +34,23 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [user]);
+
+    // Listen for instant reactive updates when a scan completes anywhere in the app
+    const handleScanCompleted = () => {
+      fetchDashboardData();
+    };
+
+    window.addEventListener('sentinel_scan_completed', handleScanCompleted);
+    return () => {
+      window.removeEventListener('sentinel_scan_completed', handleScanCompleted);
+    };
+  }, [user?.id]);
 
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      if (!isSupabaseConfigured || !supabase) {
-        setLoading(false);
-        return;
-      }
-
-      // 1. Fetch user-specific scan records (or all accessible records if RLS allows)
-      let query = supabase
-        .from('analyses')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (user?.id) {
-        query = query.eq('user_id', user.id);
-      } else {
-        query = query.limit(10);
-      }
-
-      const { data: records, error } = await query;
-      if (error) {
-        console.warn('Dashboard fetch warning:', error.message);
-      }
-
-      const userRecords = records || [];
+      // 1. Fetch user-specific scan records via unified dual-tier service (cloud + local sync)
+      const userRecords = await getUserScans(user?.id || null);
 
       // 2. Calculate actual real statistics from database rows
       const total = userRecords.length;
@@ -71,7 +60,7 @@ export default function Dashboard() {
       let scoreSum = 0;
 
       userRecords.forEach((item) => {
-        const score = item.risk_score || 0;
+        const score = typeof item.risk_score === 'number' ? item.risk_score : 0;
         scoreSum += score;
         if (item.decision === 'SPAM') {
           phishing++;
@@ -93,12 +82,8 @@ export default function Dashboard() {
       setRecentScans(userRecords.slice(0, 6));
 
       // 3. Query community spam intelligence count
-      const { count: commCount } = await supabase
-        .from('analyses')
-        .select('*', { count: 'exact', head: true })
-        .eq('decision', 'SPAM');
-
-      setCommunityThreats(commCount || phishing || 0);
+      const commTelemetry = await getCommunitySpamCount();
+      setCommunityThreats(commTelemetry.count || phishing || 0);
     } catch (err) {
       console.warn('Error loading dashboard stats:', err);
     } finally {
