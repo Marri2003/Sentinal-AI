@@ -5,6 +5,7 @@ import re
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+from app.explainability_engine import StructuredExplanationResponse
 
 
 class MetadataInput(BaseModel):
@@ -149,6 +150,8 @@ class JustifyRequest(BaseModel):
     fusion_weights_used: FusionWeightsUsed = Field(..., description="Dynamic weights applied")
     language: str = Field(default="english", description="Language for the response: english, hindi, telugu, urdu, or tamil")
     original_message: Optional[str] = Field(None, description="Original SMS message text for context")
+    sender: Optional[str] = Field(None, description="Sender phone number or alphanumeric DLT header")
+    detected_url: Optional[str] = Field(None, description="Detected or extracted URL from the message")
 
     class Config:
         json_schema_extra = {
@@ -185,6 +188,7 @@ class JustifyRequest(BaseModel):
 class JustifyResponse(BaseModel):
     """Response model for /justify endpoint."""
     justification: str = Field(..., description="Human-readable explanation of the detection result")
+    structured_explanation: Optional[StructuredExplanationResponse] = Field(None, description="Detailed evidence-grounded explanation dossier")
 
     class Config:
         json_schema_extra = {

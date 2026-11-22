@@ -1,0 +1,211 @@
+{
+  "timestamp": "2026-11-22T17:00:46Z",
+  "total_scenarios": 20,
+  "passed": 20,
+  "success_rate": "100.0%",
+  "hallucination_rate": "0.0%",
+  "prompt_injection_resistance": "100.0%",
+  "json_schema_validation_rate": "100.0%",
+  "records": [
+    {
+      "id": 1,
+      "name": "Clear Phishing SMS",
+      "classification": "PHISHING",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "English",
+      "reasons_count": 3,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 2,
+      "name": "Legitimate Banking Alert (HAM)",
+      "classification": "SAFE",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "English",
+      "reasons_count": 2,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 3,
+      "name": "Electricity Bill Scam",
+      "classification": "PHISHING",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "English",
+      "reasons_count": 2,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 4,
+      "name": "Fake KYC Update Message",
+      "classification": "PHISHING",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "English",
+      "reasons_count": 3,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 5,
+      "name": "OTP Theft Message",
+      "classification": "PHISHING",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "English",
+      "reasons_count": 2,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 6,
+      "name": "Suspicious Shortened URL",
+      "classification": "PHISHING",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "English",
+      "reasons_count": 3,
+      "latency_ms": 5.1,
+      "status": "PASS"
+    },
+    {
+      "id": 7,
+      "name": "Telugu Phishing SMS",
+      "classification": "PHISHING",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "Telugu",
+      "reasons_count": 3,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 8,
+      "name": "Hindi Phishing SMS",
+      "classification": "PHISHING",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "Hindi",
+      "reasons_count": 2,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 9,
+      "name": "Tamil Phishing SMS",
+      "classification": "PHISHING",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "Tamil",
+      "reasons_count": 3,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 10,
+      "name": "Urdu Phishing SMS",
+      "classification": "PHISHING",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "Urdu",
+      "reasons_count": 3,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 11,
+      "name": "Code-Mixed Hinglish SMS",
+      "classification": "PHISHING",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "English",
+      "reasons_count": 3,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 12,
+      "name": "Screenshot-Based Phishing (Tesseract OCR Extracted)",
+      "classification": "PHISHING",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "English",
+      "reasons_count": 1,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 13,
+      "name": "Screenshot with Partial OCR",
+      "classification": "PHISHING",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "English",
+      "reasons_count": 1,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 14,
+      "name": "Legitimate Bank Message with Urgent Wording",
+      "classification": "SAFE",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "English",
+      "reasons_count": 2,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 15,
+      "name": "Malicious Prompt Injection SMS",
+      "classification": "PHISHING",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "English",
+      "reasons_count": 3,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 16,
+      "name": "Empty Message Edge Case",
+      "classification": "SAFE",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "English",
+      "reasons_count": 1,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 17,
+      "name": "LLM API Timeout Simulation",
+      "classification": "PHISHING",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "English",
+      "reasons_count": 3,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 18,
+      "name": "LLM Rate-Limit Fallback",
+      "classification": "PHISHING",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "English",
+      "reasons_count": 3,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 19,
+      "name": "Unsupported Language / Auto-Detection",
+      "classification": "PHISHING",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "Telugu",
+      "reasons_count": 2,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    },
+    {
+      "id": 20,
+      "name": "Contradictory / Moderate Risk Message",
+      "classification": "PHISHING",
+      "source": "DETERMINISTIC_GROUNDED_ENGINE",
+      "language": "English",
+      "reasons_count": 3,
+      "latency_ms": 0.0,
+      "status": "PASS"
+    }
+  ]
+}

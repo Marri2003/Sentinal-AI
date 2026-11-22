@@ -192,7 +192,7 @@ export default function Analyze() {
         .then((telemetry) => setCommunityCount(telemetry.count))
         .catch(() => setCommunityCount(0));
 
-      getJustification(res, language, effectiveText)
+      getJustification(res, language, effectiveText, payload.metadata.sender, payload.metadata.url)
         .then(setJustification)
         .catch(() => {});
 

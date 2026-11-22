@@ -50,6 +50,8 @@ from app.models import (
     ChatResponse
 )
 
+from app.explainability_engine import generate_explanation, StructuredExplanationResponse
+
 from models.text_pipeline import TextPipeline
 from models.image_pipeline import ImagePipeline
 from models.metadata_pipeline import MetadataPipeline
@@ -578,46 +580,80 @@ async def generate_justification(system_prompt: str, user_prompt: str, decision:
 )
 async def justify(request: JustifyRequest):
     """
-    Generate human-readable justification for a phishing detection result.
+    Generate structured, evidence-grounded cybersecurity explanation for a phishing detection result.
 
-    Accepts the full JSON output from /predict and uses Groq's Llama 3 model
-    to generate a clear 2-3 sentence explanation for non-technical users.
-    Supports multiple languages: english, hindi, telugu, urdu, tamil.
-
-    If the Groq API fails, returns a contextual fallback justification.
+    Accepts the prediction output and evaluates model attention weights, URL metadata,
+    and DLT sender headers using Groq Llama 3.1 with strict prompt injection guardrails,
+    or our high-precision deterministic grounded engine if the LLM key is absent.
+    Supports multilingual explanations: English, Hindi, Telugu, Urdu, and Tamil.
     """
     try:
         logger.info(f"📝 Justification request received (language: {request.language})")
         logger.info(f"Decision: {request.decision}, Score: {request.final_score:.4f}")
 
-        # Build prompts with language-specific system prompt
-        system_prompt = get_justify_system_prompt(request.language)
-        user_prompt = build_justify_user_prompt(request)
+        # Safely extract contributing words
+        words = []
+        if request.explainability and request.explainability.contributing_words:
+            for w in request.explainability.contributing_words:
+                if hasattr(w, "model_dump"):
+                    words.append(w.model_dump())
+                elif hasattr(w, "dict"):
+                    words.append(w.dict())
+                elif isinstance(w, dict):
+                    words.append(w)
+                else:
+                    words.append({"word": str(w), "score": 0.5})
 
-        logger.debug(f"User prompt:\n{user_prompt}")
+        # Safely extract contributing features
+        features = []
+        if request.explainability and request.explainability.contributing_features:
+            for f in request.explainability.contributing_features:
+                if hasattr(f, "model_dump"):
+                    features.append(f.model_dump())
+                elif hasattr(f, "dict"):
+                    features.append(f.dict())
+                elif isinstance(f, dict):
+                    features.append(f)
+                else:
+                    features.append({"feature": str(f), "score": 0.5})
 
-        # Call Groq API (with fallback)
-        logger.info("Calling Groq API for justification...")
+        ocr_text = request.explainability.ocr_text if request.explainability else None
 
-        justification = await generate_justification(
-            system_prompt,
-            user_prompt,
-            decision=request.decision,
-            score=request.final_score,
+        structured_resp = await generate_explanation(
+            classification=request.decision,
+            risk_score=request.final_score,
+            confidence=request.confidence,
+            original_message=request.original_message or "",
+            contributing_words=words,
+            contributing_features=features,
+            ocr_text=ocr_text,
+            sender=request.sender or "",
+            detected_url=request.detected_url or "",
             language=request.language
         )
 
-        logger.success(f"✅ Justification generated ({len(justification)} chars)")
-        logger.debug(f"Justification: {justification}")
-
-        return JustifyResponse(justification=justification)
+        logger.success(f"✅ Explanation generated successfully via {structured_resp.explanation_source}")
+        return JustifyResponse(
+            justification=structured_resp.explanation.summary,
+            structured_explanation=structured_resp
+        )
 
     except Exception as e:
         logger.error(f"❌ Justification error: {e}")
         logger.error(traceback.format_exc())
-        # Even if everything fails, return a generic fallback
-        fallback = get_fallback_justification(request.decision, request.final_score, request.language)
-        return JustifyResponse(justification=fallback)
+        from app.explainability_engine import generate_grounded_fallback_explanation
+        fallback_struct = generate_grounded_fallback_explanation(
+            classification=request.decision,
+            risk_score=request.final_score,
+            original_message=request.original_message or "",
+            contributing_words=[],
+            contributing_features=[],
+            language=request.language
+        )
+        return JustifyResponse(
+            justification=fallback_struct.explanation.summary,
+            structured_explanation=fallback_struct
+        )
 
 
 async def call_groq_chat_api(user_message: str, language: str) -> str:

@@ -59,7 +59,7 @@ export async function predictPhishing(data) {
 /**
  * Generate LLM-based explanation/justification
  */
-export async function getJustification(result, language = 'english', originalMessage = '') {
+export async function getJustification(result, language = 'english', originalMessage = '', sender = '', detectedUrl = '') {
   const payload = {
     final_score: result.final_score,
     decision: result.decision,
@@ -68,7 +68,9 @@ export async function getJustification(result, language = 'english', originalMes
     explainability: result.explainability,
     fusion_weights_used: result.fusion_weights_used,
     language,
-    original_message: originalMessage
+    original_message: originalMessage,
+    sender,
+    detected_url: detectedUrl
   };
 
   try {
@@ -83,7 +85,10 @@ export async function getJustification(result, language = 'english', originalMes
     }
 
     const data = await response.json();
-    return data.justification;
+    return {
+      summary: data.justification,
+      structured: data.structured_explanation || null
+    };
   } catch (err) {
     console.error('Error fetching justification:', err);
     throw err;
