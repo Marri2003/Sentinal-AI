@@ -16,7 +16,8 @@ import {
   Activity,
   Menu,
   X,
-  ExternalLink
+  ExternalLink,
+  Layers
 } from 'lucide-react';
 import { useAuth } from '../App';
 import { signOut } from '../services/supabase';

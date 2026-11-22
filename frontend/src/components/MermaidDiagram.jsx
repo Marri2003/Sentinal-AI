@@ -13,32 +13,29 @@ import {
   Info
 } from 'lucide-react';
 
-export default function MermaidDiagram({ 
-  id, 
-  title, 
-  subtitle, 
-  chart, 
-  legend = [] 
-}) {
-  const [viewMode, setViewMode] = useState('diagram'); // 'diagram' | 'code'
-  const [copied, setCopied] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
-  const [zoom, setZoom] = useState(1);
-  const [svgContent, setSvgContent] = useState('');
-  const [renderError, setRenderError] = useState(null);
-  const containerRef = useRef(null);
+// Safe Mermaid CDN loader that will never crash the app
+function getMermaidInstance() {
+  if (typeof window === 'undefined') return Promise.resolve(null);
+  if (window.mermaid) return Promise.resolve(window.mermaid);
 
-  // Dynamic Mermaid loader from CDN with local initialization
-  useEffect(() => {
-    let isMounted = true;
-    async function renderChart() {
+  return new Promise((resolve) => {
+    const existing = document.getElementById('sentinel-mermaid-cdn');
+    if (existing) {
+      if (window.mermaid) return resolve(window.mermaid);
+      existing.addEventListener('load', () => resolve(window.mermaid || null));
+      existing.addEventListener('error', () => resolve(null));
+      setTimeout(() => resolve(window.mermaid || null), 2500);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.id = 'sentinel-mermaid-cdn';
+    script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+    script.async = true;
+    script.onload = () => {
       try {
-        setRenderError(null);
-        let mermaidInstance = window.mermaid;
-        if (!mermaidInstance) {
-          const mod = await import(/* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs');
-          mermaidInstance = mod.default;
-          mermaidInstance.initialize({
+        if (window.mermaid) {
+          window.mermaid.initialize({
             startOnLoad: false,
             theme: 'dark',
             securityLevel: 'loose',
@@ -60,18 +57,58 @@ export default function MermaidDiagram({
               edgeLabelBackground: '#0b1120'
             }
           });
-          window.mermaid = mermaidInstance;
+        }
+      } catch (e) {
+        console.warn('Mermaid initialization warning:', e);
+      }
+      resolve(window.mermaid || null);
+    };
+    script.onerror = () => {
+      console.warn('Mermaid CDN script could not be loaded; using code fallback');
+      resolve(null);
+    };
+    document.head.appendChild(script);
+  });
+}
+
+export default function MermaidDiagram({ 
+  id = 'diagram', 
+  title, 
+  subtitle, 
+  chart, 
+  legend = [] 
+}) {
+  const [viewMode, setViewMode] = useState('diagram'); // 'diagram' | 'code'
+  const [copied, setCopied] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [svgContent, setSvgContent] = useState('');
+  const [renderError, setRenderError] = useState(null);
+  const containerRef = useRef(null);
+
+  // Dynamic Mermaid loader with local initialization
+  useEffect(() => {
+    let isMounted = true;
+    async function renderChart() {
+      try {
+        setRenderError(null);
+        const mermaid = await getMermaidInstance();
+        if (!mermaid) {
+          if (isMounted) {
+            setRenderError('Interactive diagram source ready');
+          }
+          return;
         }
 
-        const uniqueId = `mermaid_${id}_${Date.now()}`;
-        const { svg } = await mermaidInstance.render(uniqueId, chart);
+        const safeId = `mermaid_${String(id).replace(/[^a-zA-Z0-9_]/g, '_')}_${Math.random().toString(36).substring(2, 8)}`;
+        const { svg } = await mermaid.render(safeId, chart);
         if (isMounted) {
           setSvgContent(svg);
         }
       } catch (err) {
-        console.warn('Mermaid rendering issue (showing interactive code fallback):', err);
+        console.warn('Mermaid render issue (showing code view):', err);
         if (isMounted) {
-          setRenderError(err.message || 'Diagram rendering notice');
+          setRenderError(err?.message || 'Diagram syntax ready');
         }
       }
     }
