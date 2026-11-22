@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, 
   ShieldCheck, 
@@ -23,12 +23,28 @@ import {
   ChevronUp,
   Cpu,
   Lock,
-  Globe2
+  Globe2,
+  Calendar,
+  Clock,
+  Loader2
 } from 'lucide-react';
+import { getJustification } from '../services/sentinelApi';
 
 export default function ResultCard({ result, justification, communityCount = 0 }) {
   const [copied, setCopied] = useState(false);
-  const [showTechnicalDetails, setShowTechnicalDetails] = useState(true);
+  const [currentJustification, setCurrentJustification] = useState(justification);
+  const [activeLang, setActiveLang] = useState('english');
+  const [langLoading, setLangLoading] = useState(false);
+  
+  // Collapsible Section State
+  const [collapseIndicators, setCollapseIndicators] = useState(false);
+  const [collapseAttack, setCollapseAttack] = useState(false);
+  const [collapseActions, setCollapseActions] = useState(false);
+  const [collapseTechnical, setCollapseTechnical] = useState(false);
+
+  useEffect(() => {
+    setCurrentJustification(justification);
+  }, [justification]);
 
   if (!result) return null;
 
@@ -45,11 +61,11 @@ export default function ResultCard({ result, justification, communityCount = 0 }
   const ocrText = result.explainability?.ocr_text || null;
 
   // Handle both string and structured object responses
-  const summaryText = typeof justification === 'object' && justification?.summary 
-    ? justification.summary 
-    : (typeof justification === 'string' ? justification : null);
+  const summaryText = typeof currentJustification === 'object' && currentJustification?.summary 
+    ? currentJustification.summary 
+    : (typeof currentJustification === 'string' ? currentJustification : null);
 
-  const structured = typeof justification === 'object' ? justification?.structured : null;
+  const structured = typeof currentJustification === 'object' ? currentJustification?.structured : null;
   const explanation = structured?.explanation || null;
 
   // Actions lists: prioritize structured engine if provided
@@ -110,9 +126,31 @@ export default function ResultCard({ result, justification, communityCount = 0 }
     link.click();
   };
 
+  // On-the-fly language switch
+  const switchExplanationLanguage = async (newLang) => {
+    setActiveLang(newLang);
+    setLangLoading(true);
+    try {
+      const resp = await getJustification(result, newLang, ocrText || '');
+      setCurrentJustification(resp);
+    } catch (err) {
+      console.warn('Language switch warning:', err);
+    } finally {
+      setLangLoading(false);
+    }
+  };
+
+  const languages = [
+    { code: 'english', label: 'English' },
+    { code: 'hindi', label: 'हिंदी (Hindi)' },
+    { code: 'telugu', label: 'తెలుగు (Telugu)' },
+    { code: 'urdu', label: 'اردو (Urdu)' },
+    { code: 'tamil', label: 'தமிழ் (Tamil)' }
+  ];
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* 1. Main Threat Verdict Dossier */}
+      {/* 1. Detection Result (Section A) */}
       <div className={`p-6 md:p-8 rounded-3xl border transition-all ${
         isSpam 
           ? 'bg-gradient-to-br from-red-950/40 via-[#0d1527] to-[#070b14] border-red-500/40 shadow-glow-red' 
@@ -137,11 +175,9 @@ export default function ResultCard({ result, justification, communityCount = 0 }
                 <span className="text-[11px] font-mono text-slate-400">
                   Confidence: <span className="text-white font-bold">{confidence}</span>
                 </span>
-                {structured?.language && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-cyan-300 flex items-center gap-1">
-                    <Globe2 className="h-3 w-3" /> {structured.language}
-                  </span>
-                )}
+                <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1">
+                  <Clock className="h-3 w-3 text-cyan-400" /> {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
                 {isSpam ? (explanation?.possible_attack || 'High Risk Threat Detected') : 'Message Verified Safe'}
@@ -176,7 +212,7 @@ export default function ResultCard({ result, justification, communityCount = 0 }
         </div>
       </div>
 
-      {/* 2. Structured AI Explanation Card */}
+      {/* 2. Structured AI Explanation Card (Section B & Section F Multilingual) */}
       {(summaryText || explanation) && (
         <div className="p-6 md:p-8 rounded-3xl bg-[#0d1527] border border-cyan-500/30 space-y-6 shadow-glow">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
@@ -217,198 +253,297 @@ export default function ResultCard({ result, justification, communityCount = 0 }
             </div>
           </div>
 
+          {/* Multilingual Explanation Switcher (Section F) */}
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1 uppercase mr-1">
+              <Globe2 className="h-3.5 w-3.5 text-cyan-400" /> View in Language:
+            </span>
+            {languages.map((l) => (
+              <button
+                key={l.code}
+                disabled={langLoading}
+                onClick={() => switchExplanationLanguage(l.code)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1 ${
+                  activeLang === l.code 
+                    ? 'bg-cyan-500 text-slate-950 font-bold' 
+                    : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800'
+                }`}
+              >
+                {l.label}
+              </button>
+            ))}
+            {langLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400 ml-1" />}
+          </div>
+
           {/* Executive Summary */}
           <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 text-slate-200 text-xs sm:text-sm leading-relaxed space-y-2">
             <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-400 font-bold block">Executive Summary</span>
             <p>{explanation?.summary || summaryText}</p>
           </div>
 
-          {/* Grounded Evidence Indicators */}
+          {/* Section C: Grounded Evidence Indicators */}
           {explanation?.reasons?.length > 0 && (
-            <div className="space-y-3">
-              <span className="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold flex items-center gap-1.5">
-                <CheckCircle2 className="h-3.5 w-3.5 text-cyan-400" /> Detected Grounded Indicators ({explanation.reasons.length})
-              </span>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {explanation.reasons.map((item, idx) => (
-                  <div key={idx} className="p-4 rounded-2xl bg-slate-900 border border-slate-800/80 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-white">{item.indicator}</span>
-                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase ${
-                        item.severity === 'HIGH' 
-                          ? 'bg-red-500/20 text-red-300 border border-red-500/30'
-                          : item.severity === 'MEDIUM'
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                      }`}>
-                        {item.severity}
+            <div className="space-y-3 pt-2">
+              <div 
+                onClick={() => setCollapseIndicators(!collapseIndicators)}
+                className="flex items-center justify-between cursor-pointer group"
+              >
+                <span className="text-xs font-mono uppercase tracking-wider text-slate-300 font-bold flex items-center gap-1.5 group-hover:text-cyan-400 transition">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-cyan-400" /> Detected Grounded Indicators ({explanation.reasons.length})
+                </span>
+                <button className="text-slate-400 group-hover:text-white transition">
+                  {collapseIndicators ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                </button>
+              </div>
+
+              {!collapseIndicators && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  {explanation.reasons.map((item, idx) => (
+                    <div key={idx} className="p-4 rounded-2xl bg-slate-900 border border-slate-800/80 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white">{item.indicator}</span>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase ${
+                          item.severity === 'HIGH' 
+                            ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                            : item.severity === 'MEDIUM'
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        }`}>
+                          {item.severity}
+                        </span>
+                      </div>
+                      <div className="p-2 rounded-lg bg-slate-950 font-mono text-[11px] text-cyan-300 truncate">
+                        "{item.evidence}"
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed">{item.explanation}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Section D: Attack Analysis & Sender/URL Intelligence */}
+          {(explanation?.possible_attack || explanation?.sender_analysis || explanation?.url_risk) && (
+            <div className="space-y-3 pt-2">
+              <div 
+                onClick={() => setCollapseAttack(!collapseAttack)}
+                className="flex items-center justify-between cursor-pointer group"
+              >
+                <span className="text-xs font-mono uppercase tracking-wider text-slate-300 font-bold flex items-center gap-1.5 group-hover:text-cyan-400 transition">
+                  <Activity className="h-3.5 w-3.5 text-cyan-400" /> Attack Vector & Entity Analysis
+                </span>
+                <button className="text-slate-400 group-hover:text-white transition">
+                  {collapseAttack ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                </button>
+              </div>
+
+              {!collapseAttack && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs pt-1">
+                  {explanation?.possible_attack && (
+                    <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                      <span className="text-[10px] font-mono uppercase text-slate-500 font-bold flex items-center gap-1">
+                        <ShieldAlert className="h-3 w-3 text-red-400" /> Identified Attack Technique
                       </span>
+                      <p className="text-white font-bold">{explanation.possible_attack}</p>
                     </div>
-                    <div className="p-2 rounded-lg bg-slate-950 font-mono text-[11px] text-cyan-300 truncate">
-                      "{item.evidence}"
+                  )}
+                  {explanation?.potential_impact && (
+                    <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                      <span className="text-[10px] font-mono uppercase text-slate-500 font-bold flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3 text-amber-400" /> Potential Impact
+                      </span>
+                      <p className="text-slate-300">{explanation.potential_impact}</p>
                     </div>
-                    <p className="text-xs text-slate-400 leading-relaxed">{item.explanation}</p>
-                  </div>
+                  )}
+                  {explanation?.sender_analysis && (
+                    <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                      <span className="text-[10px] font-mono uppercase text-slate-500 font-bold flex items-center gap-1">
+                        <Phone className="h-3 w-3 text-cyan-400" /> Sender Verification
+                      </span>
+                      <p className="text-slate-300">{explanation.sender_analysis}</p>
+                    </div>
+                  )}
+                  {explanation?.url_risk && (
+                    <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                      <span className="text-[10px] font-mono uppercase text-slate-500 font-bold flex items-center gap-1">
+                        <LinkIcon className="h-3 w-3 text-cyan-400" /> Destination URL Intelligence
+                      </span>
+                      <p className="text-slate-300">{explanation.url_risk}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 3. Section E: Actionable Incident Response Playbook */}
+      <div className="space-y-3">
+        <div 
+          onClick={() => setCollapseActions(!collapseActions)}
+          className="flex items-center justify-between cursor-pointer group px-2"
+        >
+          <span className="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold flex items-center gap-1.5 group-hover:text-white transition">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Actionable Incident Response Playbook
+          </span>
+          <button className="text-slate-400 group-hover:text-white transition">
+            {collapseActions ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+          </button>
+        </div>
+
+        {!collapseActions && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* What to DO */}
+            <div className="p-6 rounded-3xl bg-[#0d1527] border border-emerald-500/20 space-y-4">
+              <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
+                <CheckCircle2 className="h-5 w-5" /> Recommended Actions (What to DO)
+              </div>
+              <ul className="space-y-2.5 text-xs text-slate-300">
+                {doList.map((rec, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="text-emerald-400 font-bold mt-0.5">•</span>
+                    <span>{rec}</span>
+                  </li>
                 ))}
+              </ul>
+            </div>
+
+            {/* What NOT to DO */}
+            <div className="p-6 rounded-3xl bg-[#0d1527] border border-red-500/20 space-y-4">
+              <div className="flex items-center gap-2 text-red-400 font-bold text-sm">
+                <XCircle className="h-5 w-5" /> Threat Defense Rules (What NOT to Do)
+              </div>
+              <ul className="space-y-2.5 text-xs text-slate-300">
+                {dontList.map((rec, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="text-red-400 font-bold mt-0.5">•</span>
+                    <span>{rec}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 4. Technical Modality Pipelines & Token Attribution Cloud */}
+      <div className="space-y-3">
+        <div 
+          onClick={() => setCollapseTechnical(!collapseTechnical)}
+          className="flex items-center justify-between cursor-pointer group px-2"
+        >
+          <span className="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold flex items-center gap-1.5 group-hover:text-white transition">
+            <Layers className="h-3.5 w-3.5 text-cyan-400" /> Multi-Modal Pipeline Breakdown & Token Attribution
+          </span>
+          <button className="text-slate-400 group-hover:text-white transition">
+            {collapseTechnical ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+          </button>
+        </div>
+
+        {!collapseTechnical && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Text Pipeline */}
+              <div className="p-5 rounded-2xl bg-[#0d1527] border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400 font-bold flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-cyan-400" /> XLM-RoBERTa (Text)
+                  </span>
+                  <span className="font-mono text-cyan-400 font-bold">
+                    {textScore != null ? `${textScore}%` : 'N/A'}
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-cyan-400 transition-all duration-500" 
+                    style={{ width: `${textScore || 0}%` }}
+                  ></div>
+                </div>
+                <div className="text-[10px] text-slate-500 font-mono">
+                  Fusion Weight: {Math.round((weights.text || 0) * 100)}%
+                </div>
+              </div>
+
+              {/* Metadata Pipeline */}
+              <div className="p-5 rounded-2xl bg-[#0d1527] border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400 font-bold flex items-center gap-2">
+                    <LinkIcon className="h-4 w-4 text-blue-400" /> Metadata & URL FFNN
+                  </span>
+                  <span className="font-mono text-blue-400 font-bold">
+                    {metaScore != null ? `${metaScore}%` : 'N/A'}
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-blue-500 transition-all duration-500" 
+                    style={{ width: `${metaScore || 0}%` }}
+                  ></div>
+                </div>
+                <div className="text-[10px] text-slate-500 font-mono">
+                  Fusion Weight: {Math.round((weights.metadata || 0) * 100)}%
+                </div>
+              </div>
+
+              {/* OCR Image Pipeline */}
+              <div className="p-5 rounded-2xl bg-[#0d1527] border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400 font-bold flex items-center gap-2">
+                    <ImageIcon className="h-4 w-4 text-purple-400" /> Tesseract OCR (Image)
+                  </span>
+                  <span className="font-mono text-purple-400 font-bold">
+                    {imgScore != null ? `${imgScore}%` : 'N/A'}
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-purple-500 transition-all duration-500" 
+                    style={{ width: `${imgScore || 0}%` }}
+                  ></div>
+                </div>
+                <div className="text-[10px] text-slate-500 font-mono">
+                  Fusion Weight: {Math.round((weights.image || 0) * 100)}%
+                </div>
               </div>
             </div>
-          )}
 
-          {/* Sender & URL Intelligence */}
-          {(explanation?.sender_analysis || explanation?.url_risk) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-              {explanation?.sender_analysis && (
-                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
-                  <span className="text-[10px] font-mono uppercase text-slate-500 font-bold flex items-center gap-1">
-                    <Phone className="h-3 w-3 text-cyan-400" /> Sender Verification
-                  </span>
-                  <p className="text-slate-300">{explanation.sender_analysis}</p>
+            {/* Token Attribution Cloud */}
+            {words.length > 0 && (
+              <div className="p-6 rounded-3xl bg-[#0d1527] border border-slate-800 space-y-4">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-cyan-400" /> Key Suspicious Indicators (XLM-RoBERTa Token Attribution)
+                  </h3>
+                  <p className="text-xs text-slate-400">Tokens contributing most heavily toward threat classification:</p>
                 </div>
-              )}
-              {explanation?.url_risk && (
-                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
-                  <span className="text-[10px] font-mono uppercase text-slate-500 font-bold flex items-center gap-1">
-                    <LinkIcon className="h-3 w-3 text-cyan-400" /> Destination URL Intelligence
-                  </span>
-                  <p className="text-slate-300">{explanation.url_risk}</p>
+                <div className="flex flex-wrap gap-2">
+                  {words.map((item, idx) => {
+                    const score = typeof item === 'object' ? item.score || item.attribution : null;
+                    const word = typeof item === 'object' ? item.word || item.token : item;
+                    return (
+                      <span 
+                        key={idx}
+                        className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-mono font-semibold text-cyan-300 flex items-center gap-1.5 shadow-xs"
+                      >
+                        <span>{word}</span>
+                        {score != null && (
+                          <span className="text-[10px] px-1 rounded bg-cyan-500/20 text-cyan-400 font-bold">
+                            {Math.round(score * 100)}%
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 3. Pipeline Modality Breakdown & Dynamic Fusion Weights */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Text Pipeline */}
-        <div className="p-5 rounded-2xl bg-[#0d1527] border border-slate-800 space-y-3">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-400 font-bold flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-cyan-400" /> XLM-RoBERTa (Text)
-            </span>
-            <span className="font-mono text-cyan-400 font-bold">
-              {textScore != null ? `${textScore}%` : 'N/A'}
-            </span>
+              </div>
+            )}
           </div>
-          <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-cyan-400 transition-all duration-500" 
-              style={{ width: `${textScore || 0}%` }}
-            ></div>
-          </div>
-          <div className="text-[10px] text-slate-500 font-mono">
-            Fusion Weight: {Math.round((weights.text || 0) * 100)}%
-          </div>
-        </div>
-
-        {/* Metadata Pipeline */}
-        <div className="p-5 rounded-2xl bg-[#0d1527] border border-slate-800 space-y-3">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-400 font-bold flex items-center gap-2">
-              <LinkIcon className="h-4 w-4 text-blue-400" /> Metadata & URL FFNN
-            </span>
-            <span className="font-mono text-blue-400 font-bold">
-              {metaScore != null ? `${metaScore}%` : 'N/A'}
-            </span>
-          </div>
-          <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-blue-500 transition-all duration-500" 
-              style={{ width: `${metaScore || 0}%` }}
-            ></div>
-          </div>
-          <div className="text-[10px] text-slate-500 font-mono">
-            Fusion Weight: {Math.round((weights.metadata || 0) * 100)}%
-          </div>
-        </div>
-
-        {/* OCR Image Pipeline */}
-        <div className="p-5 rounded-2xl bg-[#0d1527] border border-slate-800 space-y-3">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-400 font-bold flex items-center gap-2">
-              <ImageIcon className="h-4 w-4 text-purple-400" /> Tesseract OCR (Image)
-            </span>
-            <span className="font-mono text-purple-400 font-bold">
-              {imgScore != null ? `${imgScore}%` : 'N/A'}
-            </span>
-          </div>
-          <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-purple-500 transition-all duration-500" 
-              style={{ width: `${imgScore || 0}%` }}
-            ></div>
-          </div>
-          <div className="text-[10px] text-slate-500 font-mono">
-            Fusion Weight: {Math.round((weights.image || 0) * 100)}%
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* 4. Token Attribution Cloud (Explainable AI) */}
-      {words.length > 0 && (
-        <div className="p-6 rounded-3xl bg-[#0d1527] border border-slate-800 space-y-4">
-          <div className="space-y-1">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-cyan-400" /> Key Suspicious Indicators (XLM-RoBERTa Token Attribution)
-            </h3>
-            <p className="text-xs text-slate-400">Tokens contributing most heavily toward threat classification:</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {words.map((item, idx) => {
-              const score = typeof item === 'object' ? item.score || item.attribution : null;
-              const word = typeof item === 'object' ? item.word || item.token : item;
-              return (
-                <span 
-                  key={idx}
-                  className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs font-mono font-semibold text-cyan-300 flex items-center gap-1.5 shadow-xs"
-                >
-                  <span>{word}</span>
-                  {score != null && (
-                    <span className="text-[10px] px-1 rounded bg-cyan-500/20 text-cyan-400 font-bold">
-                      {Math.round(score * 100)}%
-                    </span>
-                  )}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* 5. Actionable Incident Response Playbook */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* What to DO */}
-        <div className="p-6 rounded-3xl bg-[#0d1527] border border-emerald-500/20 space-y-4">
-          <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
-            <CheckCircle2 className="h-5 w-5" /> Recommended Actions (What to DO)
-          </div>
-          <ul className="space-y-2.5 text-xs text-slate-300">
-            {doList.map((rec, i) => (
-              <li key={i} className="flex items-start gap-2">
-                <span className="text-emerald-400 font-bold mt-0.5">•</span>
-                <span>{rec}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* What NOT to DO */}
-        <div className="p-6 rounded-3xl bg-[#0d1527] border border-red-500/20 space-y-4">
-          <div className="flex items-center gap-2 text-red-400 font-bold text-sm">
-            <XCircle className="h-5 w-5" /> Threat Defense Rules (What NOT to Do)
-          </div>
-          <ul className="space-y-2.5 text-xs text-slate-300">
-            {dontList.map((rec, i) => (
-              <li key={i} className="flex items-start gap-2">
-                <span className="text-red-400 font-bold mt-0.5">•</span>
-                <span>{rec}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
-      {/* 6. Official Indian Cyber Crime Reporting Escalation */}
+      {/* 5. Official Indian Cyber Crime Reporting Escalation */}
       {isSpam && (
         <div className="p-6 rounded-3xl bg-slate-900 border border-red-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
