@@ -1,5 +1,15 @@
 import React from 'react';
-import { HelpCircle, AlertTriangle, ShieldCheck, PhoneCall, ExternalLink } from 'lucide-react';
+import { 
+  HelpCircle, 
+  AlertTriangle, 
+  ShieldCheck, 
+  PhoneCall, 
+  ExternalLink,
+  Layers,
+  FileCheck,
+  Lock,
+  Flame
+} from 'lucide-react';
 
 export default function Help() {
   const faqs = [
@@ -26,25 +36,30 @@ export default function Help() {
   ];
 
   return (
-    <div className="container mx-auto px-4 py-12 max-w-3xl space-y-8">
-      <div className="bg-white border border-border rounded-3xl p-8 shadow-sm space-y-6">
+    <div className="space-y-8 max-w-4xl animate-in fade-in duration-300">
+      {/* Help & FAQ Main Card */}
+      <div className="p-6 md:p-8 rounded-3xl bg-[#0d1527] border border-slate-800 space-y-6">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-orange-100 rounded-xl text-primary">
-            <HelpCircle className="h-6 w-6 text-primary" />
+          <div className="p-2.5 bg-cyan-500/10 border border-cyan-500/20 rounded-2xl text-cyan-400">
+            <HelpCircle className="h-6 w-6 text-cyan-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-extrabold text-slate-900">Frequently Asked Questions & Help</h1>
-            <p className="text-sm text-slate-500">Learn how smishing works and how SentinelAI protects you.</p>
+            <h1 className="text-xl md:text-2xl font-black text-white tracking-tight">
+              Frequently Asked Questions & Help
+            </h1>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Learn how multi-modal smishing detection works and how SentinelAI protects you.
+            </p>
           </div>
         </div>
 
         <div className="space-y-4 pt-2">
           {faqs.map((f, idx) => (
-            <div key={idx} className="border border-slate-200 rounded-2xl p-5 space-y-2 bg-slate-50/50">
-              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                <span className="text-primary font-extrabold">Q:</span> {f.q}
+            <div key={idx} className="border border-slate-800 rounded-2xl p-5 space-y-2 bg-slate-900/60 hover:border-slate-700 transition">
+              <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                <span className="text-cyan-400 font-black">Q:</span> {f.q}
               </h3>
-              <p className="text-xs text-slate-600 leading-relaxed pl-5">
+              <p className="text-xs text-slate-400 leading-relaxed pl-5">
                 {f.a}
               </p>
             </div>
@@ -53,35 +68,36 @@ export default function Help() {
       </div>
 
       {/* Official Reporting Resources */}
-      <div className="bg-orange-50/80 border border-orange-200 rounded-3xl p-8 shadow-sm space-y-4">
+      <div className="p-6 md:p-8 rounded-3xl bg-[#0d1527] border border-amber-500/30 space-y-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-orange-200 rounded-xl text-primary">
-            <PhoneCall className="h-6 w-6 text-primary" />
+          <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-400">
+            <PhoneCall className="h-6 w-6 text-amber-400" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Official Indian Cybercrime Helplines</h2>
-            <p className="text-xs text-slate-600">If you have been scammed or lost money, act immediately:</p>
+            <h2 className="text-lg font-bold text-white">Official Indian Cybercrime Helplines</h2>
+            <p className="text-xs text-slate-400">If you have been scammed or lost money, act immediately during the Golden Hour:</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-          <div className="bg-white p-4 rounded-xl border border-orange-200">
-            <div className="text-xs font-semibold text-slate-500">National Cyber Crime Helpline</div>
-            <div className="text-xl font-extrabold text-slate-900 mt-1">1930 (Toll Free)</div>
-            <div className="text-xs text-slate-500 mt-1">Immediate financial fraud reporting (Golden Hour)</div>
+          <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
+            <div className="text-xs font-semibold text-slate-400">National Cyber Crime Helpline</div>
+            <div className="text-2xl font-black text-cyan-400 tracking-tight mt-1">1930 (Toll Free)</div>
+            <div className="text-xs text-slate-400 mt-1">Immediate financial fraud reporting (Golden Hour)</div>
           </div>
 
-          <div className="bg-white p-4 rounded-xl border border-orange-200">
-            <div className="text-xs font-semibold text-slate-500">National Cyber Crime Portal</div>
+          <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
+            <div className="text-xs font-semibold text-slate-400">National Cyber Crime Portal</div>
             <a
               href="https://cybercrime.gov.in"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-base font-bold text-primary hover:underline flex items-center gap-1 mt-1"
+              className="text-base font-bold text-cyan-400 hover:text-cyan-300 hover:underline flex items-center gap-1.5 mt-1"
             >
-              cybercrime.gov.in <ExternalLink className="h-4 w-4" />
+              <span>cybercrime.gov.in</span>
+              <ExternalLink className="h-4 w-4" />
             </a>
-            <div className="text-xs text-slate-500 mt-1">Ministry of Home Affairs portal</div>
+            <div className="text-xs text-slate-400 mt-1">Ministry of Home Affairs portal (I4C)</div>
           </div>
         </div>
       </div>

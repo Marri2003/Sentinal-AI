@@ -65,6 +65,16 @@ create policy "Anyone can read spam telemetry"
     on public.analyses for select
     using (decision = 'SPAM');
 
+-- C. Insert Policy: Allow users and anonymous to log detection scans
+create policy "Users and anonymous can insert analyses"
+    on public.analyses for insert
+    with check (true);
+
+-- D. Delete Policy: Allow users to delete their own scan history records
+create policy "Users can delete their own analyses"
+    on public.analyses for delete
+    using (auth.uid() = user_id);
+
 -- 3. Automatic Profile Creation Trigger on Sign Up
 create or replace function public.handle_new_user()
 returns trigger as $$
