@@ -33,6 +33,16 @@ const PRELOAD_SAMPLES = [
     text: 'Dear consumer, your electricity power will be disconnected tonight at 9:30 PM from the sub-station because your bill was not updated. Contact official immediately at 9876543210.'
   },
   {
+    label: '🎁 KBC Lottery Winner Scam',
+    phone: '+917012345678',
+    text: 'CONGRATULATIONS! Your mobile number won Rs 25,00,000 in KBC All India Lucky Draw 2026. Deposit Rs 2,500 tax fees to claim voucher at http://kbc-lottery-winner.xyz/claim'
+  },
+  {
+    label: '💼 Part-Time Job Scam',
+    phone: '+918899001122',
+    text: 'AMAZON HIRING: Part-time work from home opportunity. Earn Rs 2,000 - 5,000 daily by rating products online. No experience required. WhatsApp HR now at https://wa.me/918899001122'
+  },
+  {
     label: '✅ Legitimate HDFC Bank Alert (Ham)',
     phone: 'HDFCBK',
     text: 'INR 2,450.00 debited from A/c **7890 on 21-Nov-2026 at FLIPKART INDIA. Avl Bal: INR 34,210.50. If not you, SMS BLOCK to 56767.'

@@ -249,6 +249,38 @@ export default function ResultCard({ result, justification, communityCount = 0 }
           </ul>
         </div>
       </div>
+
+      {/* 5. Official Indian Cyber Crime Reporting Escalation */}
+      {isSpam && (
+        <div className="p-6 rounded-3xl bg-slate-900 border border-red-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-2xl bg-red-500/10 text-red-400 border border-red-500/20">
+              <Phone className="h-6 w-6" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-white">Escalate Fraud Incident to Authorities</h4>
+              <p className="text-xs text-slate-400">National Cyber Crime Reporting Portal (MHA / I4C) & Toll-Free Helpline</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              href="tel:1930"
+              className="px-4 py-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40 text-xs font-mono font-bold transition flex items-center gap-2"
+            >
+              <span>Call Helpline 1930</span>
+            </a>
+            <a
+              href="https://cybercrime.gov.in"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition flex items-center gap-1.5"
+            >
+              <span>cybercrime.gov.in</span>
+              <Terminal className="h-3.5 w-3.5" />
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
