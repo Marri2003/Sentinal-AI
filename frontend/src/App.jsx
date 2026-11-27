@@ -14,8 +14,9 @@ import Auth from './pages/Auth';
 import Demo from './pages/Demo';
 import { supabase, isSupabaseConfigured } from './services/supabase';
 
-// Lazy load About & Architecture section for clean code-splitting
+// Lazy load About & Architecture sections for clean code-splitting
 const About = lazy(() => import('./pages/About'));
+const Architecture = lazy(() => import('./pages/Architecture'));
 
 // Page loading skeleton fallback
 function PageFallback() {
@@ -78,7 +79,14 @@ export default function App() {
                   </Suspense>
                 } 
               />
-              <Route path="/architecture" element={<Navigate to="/about" replace />} />
+              <Route 
+                path="/architecture" 
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <Architecture />
+                  </Suspense>
+                } 
+              />
               <Route path="/demo" element={<Demo />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
